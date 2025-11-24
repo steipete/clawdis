@@ -22,12 +22,13 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
 ## Providers (choose per command)
 
 - **Twilio (default)** — full feature set: send, wait/poll delivery, status, inbound polling/webhook, auto-replies. Requires `.env` Twilio creds and a WhatsApp-enabled number (`TWILIO_WHATSAPP_FROM`).
-- **Web (`--provider web`)** — uses your personal WhatsApp Web session via QR. Currently **send-only** (no inbound/auto-reply/status yet) and returns immediately without delivery polling. Setup: `pnpm warelay web:login` then send with `--provider web`. Session data lives in `~/.warelay/waweb/`; if logged out, rerun `web:login`. Use at your own risk (personal-account automation can be rate-limited or logged out by WhatsApp).
+- **Web (`--provider web`)** — personal WhatsApp Web session via QR. Supports outbound sends (`send --provider web`) and inbound auto-replies when you run `pnpm warelay web:monitor`. No delivery-status polling for web sends. Setup: `pnpm warelay web:login` then either send with `--provider web` or keep `web:monitor` running. Session data lives in `~/.warelay/waweb/`; if logged out, rerun `web:login`. Use at your own risk (personal-account automation can be rate-limited or logged out by WhatsApp).
 
 ## Common Commands
 
 - Send: `pnpm warelay send --to +12345550000 --message "Hello" --wait 20 --poll 2`
 - Send via personal WhatsApp Web: first `pnpm warelay web:login` (scan QR), then `pnpm warelay send --provider web --to +12345550000 --message "Hi"`
+- Web auto-replies (personal WA): `pnpm warelay web:login` once, then run `pnpm warelay web:monitor` to listen and auto-reply using your `~/.warelay/warelay.json` config
 - Poll (lightweight): `pnpm warelay poll --interval 5 --lookback 10 --verbose`
 - Webhook only: `pnpm warelay webhook --port 42873 --path /webhook/whatsapp --verbose`
 - Webhook + Funnel + Twilio update: `pnpm warelay up --port 42873 --path /webhook/whatsapp --verbose`
@@ -46,9 +47,19 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
       command: [
         "claude",
         "-p",
+        "--output-format",
+        "json",
         "--dangerously-skip-permissions",
         "{{Body}}"
-      ]
+      ],
+      session: {
+        scope: "per-sender",
+        resetTriggers: ["/new"],
+        idleMinutes: 60,
+        sessionArgNew: ["--session-id", "{{SessionId}}"],
+        sessionArgResume: ["--resume", "{{SessionId}}"],
+        sessionArgBeforeBody: true
+      }
     }
   }
 }
@@ -64,7 +75,8 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
 ```
 
 Notes:
-- Templates support `{{Body}}`, `{{From}}`, `{{To}}`, `{{MessageSid}}`.
+- Templates support `{{Body}}`, `{{BodyStripped}}`, `{{From}}`, `{{To}}`, `{{MessageSid}}`, plus `{{SessionId}}`/`{{IsNewSession}}` when session reuse is enabled.
+- `/new` (or any `resetTriggers` value) resets the session. `/new ask…` resets and sends `ask…` as the prompt (via `BodyStripped`).
 - When an auto-reply starts (text or command), warelay sends a WhatsApp typing indicator tied to the inbound `MessageSid`.
 
 ## Troubleshooting Delivery
@@ -83,6 +95,12 @@ Notes:
 | `inbound.reply.command` | `string[]` | — | Argv to run for command mode; templated per element. Stdout (trimmed) is sent. |
 | `inbound.reply.template` | `string` | — | Optional string inserted as second argv element (prompt prefix). |
 | `inbound.reply.bodyPrefix` | `string` | — | Prepends to `Body` before templating (ideal for system instructions). |
+| `inbound.reply.session.scope` | `"per-sender" \| "global"` | `per-sender` | Session key: one per sender or single global chat. |
+| `inbound.reply.session.resetTriggers` | `string[]` | `["/new"]` | Any entry acts as both exact reset token and prefix (`/new hi`). |
+| `inbound.reply.session.idleMinutes` | `number` | `60` | Expire and recreate session after this idle time. |
+| `inbound.reply.session.sessionArgNew` | `string[]` | `["--session-id","{{SessionId}}"]` | Args inserted for a new session run. |
+| `inbound.reply.session.sessionArgResume` | `string[]` | `["--resume","{{SessionId}}"]` | Args inserted when resuming an existing session. |
+| `inbound.reply.session.sessionArgBeforeBody` | `boolean` | `true` | Place session args before the final body argument. |
 | `inbound.reply.timeoutSeconds` | `number` | 600 | Command timeout. |
 
 ## Dev Notes
