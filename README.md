@@ -2,13 +2,21 @@
 
 Small TypeScript CLI to send, receive, auto-reply, and inspect WhatsApp messages via Twilio. Works in polling mode or webhook mode (with Tailscale Funnel helper).
 
-You can also use a personal WhatsApp Web session (QR login) via `--provider web` for direct sends alongside the Twilio flow.
+You can also talk to WhatsApp directly with a personal WhatsApp Web session (QR login) via `--provider web`—no Twilio needed for send/receive in that mode.
+
+## What it can do
+
+- Send and track delivery for WhatsApp messages over Twilio.
+- Auto-reply via webhook or polling, with Claude-backed command replies or simple text templates.
+- Run entirely on your personal WhatsApp Web session (`--provider web`) for direct messaging without Twilio.
+- One-shot `up` command to launch webhook server, publish via Tailscale Funnel, and point Twilio callbacks automatically.
 
 ## Quick Start
 
 1) Install: `pnpm install`  
 2) Configure `.env` (see `.env.example`): set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (or `TWILIO_API_KEY`/`TWILIO_API_SECRET`), and `TWILIO_WHATSAPP_FROM=whatsapp:+15551234567`. Optional: `TWILIO_SENDER_SID` if you don’t want auto-discovery.  
-3) Send a test: `pnpm warelay send --to +12345550000 --message "Hi from warelay"`  
+3) Send a test (Twilio): `pnpm warelay send --to +12345550000 --message "Hi from warelay"`  
+   Send direct via personal WhatsApp: `pnpm warelay web:login` (scan QR once) then `pnpm warelay send --provider web --to +12345550000 --message "Hi from warelay"`  
 4) Run auto-replies in polling mode (no public URL needed):  
    `pnpm warelay relay --provider twilio --interval 5 --lookback 10 --verbose`  
 5) Prefer webhooks? Launch everything in one step (webhook + Tailscale Funnel + Twilio callback):  
@@ -22,7 +30,7 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
 ## Providers (choose per command)
 
 - **Twilio (default)** — full feature set: send, wait/poll delivery, status, inbound polling/webhook, auto-replies. Requires `.env` Twilio creds and a WhatsApp-enabled number (`TWILIO_WHATSAPP_FROM`).
-- **Web (`--provider web`)** — personal WhatsApp Web session via QR. Supports outbound sends and inbound auto-replies when you run `pnpm warelay relay --provider web`. No delivery-status polling for web sends. Setup: `pnpm warelay web:login` (alias: `pnpm warelay login`) then either send with `--provider web` or keep `relay --provider web` running. Session data lives in `~/.warelay/credentials.json`; if logged out, rerun `web:login`/`login`. Use at your own risk (personal-account automation can be rate-limited or logged out by WhatsApp).
+- **Web (`--provider web`)** — direct messaging through your personal WhatsApp account (no Twilio). Supports outbound sends and inbound auto-replies when you run `pnpm warelay relay --provider web`. No delivery-status polling for web sends (WhatsApp Web doesn’t expose it). Setup: `pnpm warelay web:login` (alias: `pnpm warelay login`) then either send with `--provider web` or keep `relay --provider web` running. Session data lives in `~/.warelay/credentials.json`; if logged out, rerun `web:login`/`login`. Use at your own risk (personal-account automation can be rate-limited or logged out by WhatsApp).
 
 ## Common Commands
 
@@ -69,6 +77,13 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
 - When `command[0]` is `claude`, set `claudeOutputFormat` to `"text"`, `"json"`, or `"stream-json"` and warelay will inject `--output-format` and `-p/--print` automatically.
 - For `"json"`/`"stream-json"`, warelay now parses Claude's JSON payload and sends just the text content to WhatsApp while keeping the full JSON in logs for debugging.
 - If you omit `claudeOutputFormat`, warelay leaves your args untouched (useful for custom Claude flags).
+
+### Running without Twilio (personal WhatsApp Web)
+
+- Log in once: `pnpm warelay web:login` (or `pnpm warelay login`), scan the QR in your terminal/browser. Credentials are stored locally at `~/.warelay/credentials.json`.
+- Send: `pnpm warelay send --provider web --to +12345550000 --message "Hi"`.
+- Auto-reply loop: `pnpm warelay relay --provider web --interval 5 --lookback 10`. Typing indicators are skipped in this mode, but text replies still work.
+- You can mix modes: use Twilio for reliable delivery/status, switch to web for quick personal sends. Each command decides the provider independently.
 
 ### Simple text echo
 ```json5
