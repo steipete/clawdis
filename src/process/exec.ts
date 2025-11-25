@@ -2,12 +2,12 @@ import { execFile, spawn } from "node:child_process";
 
 import { danger, isVerbose } from "../globals.js";
 
+// Simple promise-wrapped execFile with optional verbosity logging.
 export async function runExec(
 	command: string,
 	args: string[],
 	timeoutMs = 10_000,
 ): Promise<{ stdout: string; stderr: string }> {
-	// Simple promise-wrapped execFile with optional verbosity logging.
 	try {
 		const { stdout, stderr } = await execFile(command, args, {
 			timeout: timeoutMs,

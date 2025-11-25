@@ -47,6 +47,7 @@ export async function saveSessionStore(
 	);
 }
 
+// Decide which session bucket to use (per-sender vs global).
 export function deriveSessionKey(scope: SessionScope, ctx: MsgContext) {
 	if (scope === "global") return "global";
 	const from = ctx.From ? normalizeE164(ctx.From) : "";

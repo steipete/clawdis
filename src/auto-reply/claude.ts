@@ -1,5 +1,6 @@
 // Helpers specific to Claude CLI output/argv handling.
 
+// Preferred binary name for Claude CLI invocations.
 export const CLAUDE_BIN = "claude";
 
 function extractClaudeText(payload: unknown): string | undefined {
@@ -45,7 +46,7 @@ function extractClaudeText(payload: unknown): string | undefined {
 }
 
 export function parseClaudeJsonText(raw: string): string | undefined {
-	// Handle a single JSON blob or newline-delimited JSON; return the first extracted text.
+    // Handle a single JSON blob or newline-delimited JSON; return the first extracted text.
 	const candidates = [raw, ...raw.split(/\n+/).map((s) => s.trim()).filter(Boolean)];
 	for (const candidate of candidates) {
 		try {

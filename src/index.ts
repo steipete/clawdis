@@ -8,14 +8,12 @@ import process, { stdin as input, stdout as output } from "node:process";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
-import bodyParser from "body-parser";
 import chalk from "chalk";
-import { Command } from "commander";
 import dotenv from "dotenv";
-import express, { type Request, type Response } from "express";
 import JSON5 from "json5";
 import Twilio from "twilio";
 import type { MessageInstance } from "twilio/lib/rest/api/v2010/account/message.js";
+import type { TwilioSenderListClient, TwilioRequester } from "./twilio/types.js";
 import {
 	runCommandWithTimeout,
 	runExec,
@@ -30,6 +28,19 @@ import {
 import { readEnv, ensureTwilioEnv, type EnvConfig } from "./env.js";
 import { createClient } from "./twilio/client.js";
 import { logTwilioSendError, formatTwilioError } from "./twilio/utils.js";
+import { monitorTwilio as monitorTwilioImpl } from "./twilio/monitor.js";
+import { sendMessage, waitForFinalStatus } from "./twilio/send.js";
+import { startWebhook as startWebhookImpl } from "./twilio/webhook.js";
+import {
+	updateWebhook as updateWebhookImpl,
+	findIncomingNumberSid as findIncomingNumberSidImpl,
+	findMessagingServiceSid as findMessagingServiceSidImpl,
+	setMessagingServiceWebhook as setMessagingServiceWebhookImpl,
+} from "./twilio/update-webhook.js";
+import {
+	findIncomingNumberSid as findIncomingNumberSid,
+	findMessagingServiceSid as findMessagingServiceSid,
+} from "./twilio/update-webhook.js";
 import { CLAUDE_BIN, parseClaudeJsonText } from "./auto-reply/claude.js";
 import {
 	applyTemplate,
@@ -90,7 +101,9 @@ import {
 
 dotenv.config({ quiet: true });
 
-const program = new Command();
+import { buildProgram } from "./cli/program.js";
+
+const program = buildProgram();
 
 type CliDeps = {
 	sendMessage: typeof sendMessage;
@@ -135,87 +148,6 @@ function createDefaultDeps(): CliDeps {
 		monitorWebProvider,
 	};
 }
-
-type TwilioRequestOptions = {
-	method: "get" | "post";
-	uri: string;
-	params?: Record<string, string | number>;
-	form?: Record<string, string>;
-	body?: unknown;
-	contentType?: string;
-};
-
-type TwilioSender = { sid: string; sender_id: string };
-
-type TwilioRequestResponse = {
-	data?: {
-		senders?: TwilioSender[];
-	};
-};
-
-type IncomingNumber = {
-	sid: string;
-	phoneNumber: string;
-	smsUrl?: string;
-};
-
-type TwilioChannelsSender = {
-	sid?: string;
-	senderId?: string;
-	sender_id?: string;
-	webhook?: {
-		callback_url?: string;
-		callback_method?: string;
-		fallback_url?: string;
-		fallback_method?: string;
-	};
-};
-
-type ChannelSenderUpdater = {
-	update: (params: Record<string, string>) => Promise<unknown>;
-};
-
-type IncomingPhoneNumberUpdater = {
-	update: (params: Record<string, string>) => Promise<unknown>;
-};
-
-type IncomingPhoneNumbersClient = {
-	list: (params: {
-		phoneNumber: string;
-		limit?: number;
-	}) => Promise<IncomingNumber[]>;
-	get: (sid: string) => IncomingPhoneNumberUpdater;
-} & ((sid: string) => IncomingPhoneNumberUpdater);
-
-type TwilioSenderListClient = {
-	messaging: {
-		v2: {
-			channelsSenders: {
-				list: (params: {
-					channel: string;
-					pageSize: number;
-				}) => Promise<TwilioChannelsSender[]>;
-				(
-					sid: string,
-				): ChannelSenderUpdater & {
-					fetch: () => Promise<TwilioChannelsSender>;
-				};
-			};
-		};
-		v1: {
-			services: (sid: string) => {
-				update: (params: Record<string, string>) => Promise<unknown>;
-				fetch: () => Promise<{ inboundRequestUrl?: string }>;
-			};
-		};
-	};
-	incomingPhoneNumbers: IncomingPhoneNumbersClient;
-};
-
-type TwilioRequester = {
-	request: (options: TwilioRequestOptions) => Promise<TwilioRequestResponse>;
-};
-
 
 class PortInUseError extends Error {
 	port: number;
@@ -349,91 +281,9 @@ function createClient(env: EnvConfig) {
 	});
 }
 
-async function sendMessage(
-	to: string,
-	body: string,
-	runtime: RuntimeEnv = defaultRuntime,
-) {
-	// Send outbound WhatsApp message; exit non-zero on API failure.
-	const env = readEnv(runtime);
-	const client = createClient(env);
-	const from = withWhatsAppPrefix(env.whatsappFrom);
-	const toNumber = withWhatsAppPrefix(to);
+// sendMessage / waitForFinalStatus now live in src/twilio/send.ts and are imported above.
 
-	try {
-		const message = await client.messages.create({
-			from,
-			to: toNumber,
-			body,
-		});
-
-		console.log(
-			success(
-				`✅ Request accepted. Message SID: ${message.sid} -> ${toNumber}`,
-			),
-		);
-		return { client, sid: message.sid };
-	} catch (err) {
-		const anyErr = err as {
-			code?: string | number;
-			message?: unknown;
-			moreInfo?: unknown;
-			status?: string | number;
-			response?: { body?: unknown };
-		};
-		const { code, status } = anyErr;
-		const msg =
-			typeof anyErr?.message === "string"
-				? anyErr.message
-				: (anyErr?.message ?? err);
-		const more = anyErr?.moreInfo;
-		runtime.error(
-			`❌ Twilio send failed${code ? ` (code ${code})` : ""}${status ? ` status ${status}` : ""}: ${msg}`,
-		);
-		if (more) console.error(`More info: ${more}`);
-		// Some Twilio errors include response.body with more context.
-		const responseBody = anyErr?.response?.body;
-		if (responseBody) {
-			console.error("Response body:", JSON.stringify(responseBody, null, 2));
-		}
-		runtime.exit(1);
-	}
-}
-
-const successTerminalStatuses = new Set(["delivered", "read"]);
-const failureTerminalStatuses = new Set(["failed", "undelivered", "canceled"]);
-
-async function waitForFinalStatus(
-	client: ReturnType<typeof createClient>,
-	sid: string,
-	timeoutSeconds: number,
-	pollSeconds: number,
-	runtime: RuntimeEnv = defaultRuntime,
-) {
-	// Poll message status until delivered/failed or timeout.
-	const deadline = Date.now() + timeoutSeconds * 1000;
-	while (Date.now() < deadline) {
-		const m = await client.messages(sid).fetch();
-		const status = m.status ?? "unknown";
-		if (successTerminalStatuses.has(status)) {
-			console.log(success(`✅ Delivered (status: ${status})`));
-			return;
-		}
-		if (failureTerminalStatuses.has(status)) {
-			runtime.error(
-				`❌ Delivery failed (status: ${status}${
-					m.errorCode ? `, code ${m.errorCode}` : ""
-				})${m.errorMessage ? `: ${m.errorMessage}` : ""}`,
-			);
-			runtime.exit(1);
-		}
-		await sleep(pollSeconds * 1000);
-	}
-	console.log(
-		"ℹ️  Timed out waiting for final status; message may still be in flight.",
-	);
-}
-
+// startWebhook now lives in src/twilio/webhook.ts; keep shim for existing imports/tests.
 async function startWebhook(
 	port: number,
 	path = "/webhook/whatsapp",
@@ -441,91 +291,7 @@ async function startWebhook(
 	verbose: boolean,
 	runtime: RuntimeEnv = defaultRuntime,
 ): Promise<import("http").Server> {
-	const normalizedPath = normalizePath(path);
-	// Start Express webhook; generate replies via config or CLI flag.
-	const env = readEnv(runtime);
-	const app = express();
-
-	// Twilio sends application/x-www-form-urlencoded
-	app.use(bodyParser.urlencoded({ extended: false }));
-	app.use((req, _res, next) => {
-		runtime.log(chalk.gray(`REQ ${req.method} ${req.url}`));
-		next();
-	});
-
-	app.post(normalizedPath, async (req: Request, res: Response) => {
-		const { From, To, Body, MessageSid } = req.body ?? {};
-		console.log(
-			`[INBOUND] ${From ?? "unknown"} -> ${To ?? "unknown"} (${
-				MessageSid ?? "no-sid"
-			})`,
-		);
-		if (verbose) runtime.log(chalk.gray(`Body: ${Body ?? ""}`));
-
-		const client = createClient(env);
-		let replyText = autoReply;
-		if (!replyText) {
-			replyText = await getReplyFromConfig(
-				{
-					Body,
-					From,
-					To,
-					MessageSid,
-				},
-				{
-					onReplyStart: () => sendTypingIndicator(client, MessageSid, runtime),
-				},
-			);
-		}
-
-		if (replyText) {
-			try {
-				await client.messages.create({
-					from: To,
-					to: From,
-					body: replyText,
-				});
-				if (verbose) {
-					runtime.log(success(`↩️  Auto-replied to ${From}`));
-				}
-			} catch (err) {
-				logTwilioSendError(err, From ?? undefined, runtime);
-			}
-		}
-
-		// Respond 200 OK to Twilio
-		res.type("text/xml").send("<Response></Response>");
-	});
-
-	app.use((_req, res) => {
-		if (verbose) runtime.log(chalk.yellow(`404 ${_req.method} ${_req.url}`));
-		res.status(404).send("warelay webhook: not found");
-	});
-
-	return await new Promise((resolve, reject) => {
-		const server = app.listen(port);
-
-		const onListening = () => {
-			cleanup();
-			runtime.log(
-				`📥 Webhook listening on http://localhost:${port}${normalizedPath}`,
-			);
-			resolve(server);
-		};
-
-		const onError = (err: NodeJS.ErrnoException) => {
-			cleanup();
-			reject(err);
-		};
-
-		const cleanup = () => {
-			server.off("listening", onListening);
-			server.off("error", onError);
-		};
-
-		server.once("listening", onListening);
-		server.once("error", onError);
-	});
+	return startWebhookImpl(port, path, autoReply, verbose, runtime);
 }
 
 function waitForever() {
@@ -742,77 +508,16 @@ async function findWhatsappSenderSid(
 	}
 }
 
-async function findIncomingNumberSid(
-	client: TwilioSenderListClient,
-): Promise<string | null> {
-	// Try to locate the underlying phone number and return its SID for webhook fallback.
-	const env = readEnv();
-	const phone = env.whatsappFrom.replace("whatsapp:", "");
-	try {
-		const list = await client.incomingPhoneNumbers.list({
-			phoneNumber: phone,
-			limit: 2,
-		});
-		if (!list || list.length === 0) return null;
-		if (list.length > 1 && isVerbose()) {
-			console.error(
-				warn("Multiple incoming numbers matched; using the first."),
-			);
-		}
-		return list[0]?.sid ?? null;
-	} catch (err) {
-		if (isVerbose()) console.error("incomingPhoneNumbers.list failed", err);
-		return null;
-	}
-}
 
-async function findMessagingServiceSid(
-	client: TwilioSenderListClient,
-): Promise<string | null> {
-	// Attempt to locate a messaging service tied to the WA phone number (webhook fallback).
-	type IncomingNumberWithService = { messagingServiceSid?: string };
-	try {
-		const env = readEnv();
-		const phone = env.whatsappFrom.replace("whatsapp:", "");
-		const list = await client.incomingPhoneNumbers.list({
-			phoneNumber: phone,
-			limit: 1,
-		});
-		const msid =
-			(list?.[0] as IncomingNumberWithService | undefined)
-				?.messagingServiceSid ?? null;
-		return msid;
-	} catch (err) {
-		if (isVerbose()) console.error("findMessagingServiceSid failed", err);
-		return null;
-	}
-}
 
 async function setMessagingServiceWebhook(
 	client: TwilioSenderListClient,
 	url: string,
-	method: "POST" | "GET",
+	method: "POST" | "GET" = "POST",
 ): Promise<boolean> {
-	const msid = await findMessagingServiceSid(client);
-	if (!msid) return false;
-	try {
-		await client.messaging.v1.services(msid).update({
-			InboundRequestUrl: url,
-			InboundRequestMethod: method,
-		});
-		const fetched = await client.messaging.v1.services(msid).fetch();
-		const stored = fetched?.inboundRequestUrl;
-		console.log(
-			success(
-				`✅ Messaging Service webhook set to ${stored ?? url} (service ${msid})`,
-			),
-		);
-		return true;
-	} catch (err) {
-		if (isVerbose()) console.error("Messaging Service update failed", err);
-		return false;
-	}
+	return setMessagingServiceWebhookImpl(client, url, method);
 }
+
 
 async function updateWebhook(
 	client: ReturnType<typeof createClient>,
@@ -821,139 +526,7 @@ async function updateWebhook(
 	method: "POST" | "GET" = "POST",
 	runtime: RuntimeEnv = defaultRuntime,
 ) {
-	// Point Twilio sender webhook at the provided URL.
-	const requester = client as unknown as TwilioRequester;
-	const clientTyped = client as unknown as TwilioSenderListClient;
-
-	// 1) Raw request (Channels/Senders) with JSON webhook payload — most reliable for WA
-	try {
-		await requester.request({
-			method: "post",
-			uri: `https://messaging.twilio.com/v2/Channels/Senders/${senderSid}`,
-			body: {
-				webhook: {
-					callback_url: url,
-					callback_method: method,
-				},
-			},
-			contentType: "application/json",
-		});
-		// Fetch to verify what Twilio stored
-		const fetched = await clientTyped.messaging.v2
-			.channelsSenders(senderSid)
-			.fetch();
-		const storedUrl =
-			fetched?.webhook?.callback_url || fetched?.webhook?.fallback_url;
-		if (storedUrl) {
-			console.log(success(`✅ Twilio sender webhook set to ${storedUrl}`));
-			return;
-		}
-		if (isVerbose())
-			console.error(
-				"Sender updated but webhook callback_url missing; will try fallbacks",
-			);
-	} catch (err) {
-		if (isVerbose())
-			console.error(
-				"channelsSenders request update failed, will try client helpers",
-				err,
-			);
-	}
-
-	// 1b) Form-encoded fallback for older Twilio stacks
-	try {
-		await requester.request({
-			method: "post",
-			uri: `https://messaging.twilio.com/v2/Channels/Senders/${senderSid}`,
-			form: {
-				"Webhook.CallbackUrl": url,
-				"Webhook.CallbackMethod": method,
-			},
-		});
-		const fetched = await clientTyped.messaging.v2
-			.channelsSenders(senderSid)
-			.fetch();
-		const storedUrl =
-			fetched?.webhook?.callback_url || fetched?.webhook?.fallback_url;
-		if (storedUrl) {
-			console.log(success(`✅ Twilio sender webhook set to ${storedUrl}`));
-			return;
-		}
-		if (isVerbose())
-			console.error(
-				"Form update succeeded but callback_url missing; will try helper fallback",
-			);
-	} catch (err) {
-		if (isVerbose())
-			console.error(
-				"Form channelsSenders update failed, will try helper fallback",
-				err,
-			);
-	}
-
-	// 2) SDK helper fallback (if supported by this client)
-	try {
-		if (clientTyped.messaging?.v2?.channelsSenders) {
-			await clientTyped.messaging.v2.channelsSenders(senderSid).update({
-				callbackUrl: url,
-				callbackMethod: method,
-			});
-			const fetched = await clientTyped.messaging.v2
-				.channelsSenders(senderSid)
-				.fetch();
-			const storedUrl =
-				fetched?.webhook?.callback_url || fetched?.webhook?.fallback_url;
-			console.log(
-				success(
-					`✅ Twilio sender webhook set to ${storedUrl ?? url} (helper API)`,
-				),
-			);
-			return;
-		}
-	} catch (err) {
-		if (isVerbose())
-			console.error(
-				"channelsSenders helper update failed, will try phone number fallback",
-				err,
-			);
-	}
-
-	// 3) Incoming phone number fallback (works for many WA senders)
-	try {
-		const phoneSid = await findIncomingNumberSid(clientTyped);
-		if (phoneSid) {
-			const phoneNumberUpdater = clientTyped.incomingPhoneNumbers(phoneSid);
-			await phoneNumberUpdater.update({
-				smsUrl: url,
-				smsMethod: method,
-			});
-			console.log(success(`✅ Twilio phone webhook set to ${url}`));
-			return;
-		}
-	} catch (err) {
-		if (isVerbose()) console.error("Incoming number update failed", err);
-	}
-
-	// 4) Messaging Service fallback (some WA senders are tied to a service)
-	const messagingServiceUpdated = await setMessagingServiceWebhook(
-		clientTyped,
-		url,
-		method,
-	);
-	if (messagingServiceUpdated) return;
-
-	runtime.error(danger("Failed to set Twilio webhook."));
-	runtime.error(
-		info(
-			"Double-check your sender SID and credentials; you can set TWILIO_SENDER_SID to force a specific sender.",
-		),
-	);
-	runtime.error(
-		info(
-			"Tip: if webhooks are blocked, use polling instead: `pnpm warelay relay --provider twilio --interval 5 --lookback 10`",
-		),
-	);
-	runtime.exit(1);
+	return updateWebhookImpl(client, senderSid, url, method, runtime);
 }
 
 function ensureTwilioEnv(runtime: RuntimeEnv = defaultRuntime) {
@@ -1018,65 +591,23 @@ async function monitorTwilio(
 	clientOverride?: ReturnType<typeof createClient>,
 	maxIterations = Infinity,
 ) {
-	// Poll Twilio for inbound messages and stream them with de-dupe.
-	const env = readEnv();
-	const client = clientOverride ?? createClient(env);
-	const from = withWhatsAppPrefix(env.whatsappFrom);
-
-	let since = new Date(Date.now() - lookbackMinutes * 60_000);
-	const seen = new Set<string>();
-
-	console.log(
-		`📡 Monitoring inbound messages to ${from} (poll ${intervalSeconds}s, lookback ${lookbackMinutes}m)`,
+	// Delegate to the refactored monitor in src/twilio/monitor.ts.
+	return monitorTwilioImpl(
+		intervalSeconds,
+		lookbackMinutes,
+		{
+			client: clientOverride,
+			maxIterations,
+			deps: {
+				autoReplyIfConfigured,
+				listRecentMessages,
+				readEnv,
+				createClient,
+				sleep,
+			},
+			runtime: defaultRuntime,
+		},
 	);
-
-	const updateSince = (date?: Date | null) => {
-		if (!date) return;
-		if (date.getTime() > since.getTime()) {
-			since = date;
-		}
-	};
-
-	let keepRunning = true;
-	process.once("SIGINT", () => {
-		if (!keepRunning) return;
-		keepRunning = false;
-		console.log("\n👋 Stopping monitor");
-	});
-
-	let iterations = 0;
-	while (keepRunning && iterations < maxIterations) {
-		try {
-			const messages = await client.messages.list({
-				to: from,
-				dateSentAfter: since,
-				limit: 50,
-			});
-
-			const inboundMessages = messages
-				.filter((m: MessageInstance) => m.direction === "inbound")
-				.sort((a: MessageInstance, b: MessageInstance) => {
-					const da = a.dateCreated?.getTime() ?? 0;
-					const db = b.dateCreated?.getTime() ?? 0;
-					return da - db;
-				});
-
-			for (const m of inboundMessages) {
-				if (seen.has(m.sid)) continue;
-				seen.add(m.sid);
-				const time = m.dateCreated?.toISOString() ?? "unknown time";
-				const fromNum = m.from ?? "unknown sender";
-				console.log(`\n[${time}] ${fromNum} -> ${m.to}: ${m.body ?? ""}`);
-				updateSince(m.dateCreated);
-				void autoReplyIfConfigured(client, m);
-			}
-		} catch (err) {
-			console.error("Error while polling messages", err);
-		}
-
-		await sleep(intervalSeconds * 1000);
-		iterations += 1;
-	}
 }
 
 async function monitorWebProvider(
@@ -1359,8 +890,10 @@ async function listRecentMessages(
 		limit: fetchLimit,
 	});
 
+	const inboundArr = Array.isArray(inbound) ? inbound : [];
+	const outboundArr = Array.isArray(outbound) ? outbound : [];
 	const combined = uniqueBySid(
-		[...inbound, ...outbound].map((m) => ({
+		[...inboundArr, ...outboundArr].map((m) => ({
 			sid: m.sid,
 			status: m.status ?? null,
 			direction: m.direction ?? null,
@@ -1375,227 +908,6 @@ async function listRecentMessages(
 
 	return sortByDateDesc(combined).slice(0, limit);
 }
-
-program
-	.name("warelay")
-	.description("WhatsApp relay CLI (Twilio or WhatsApp Web session)")
-	.version("1.0.0");
-
-program
-	.command("web:login")
-	.description("Link your personal WhatsApp via QR (web provider)")
-	.option("--verbose", "Verbose connection logs", false)
-	.action(async (opts) => {
-		setVerbose(Boolean(opts.verbose));
-		try {
-			await loginWeb(Boolean(opts.verbose));
-		} catch (err) {
-			defaultRuntime.error(danger(`Web login failed: ${String(err)}`));
-			defaultRuntime.exit(1);
-		}
-	});
-
-program
-	.command("login")
-	.description("Alias for web:login (personal WhatsApp Web QR link)")
-	.option("--verbose", "Verbose connection logs", false)
-	.action(async (opts) => {
-		setVerbose(Boolean(opts.verbose));
-		try {
-			await loginWeb(Boolean(opts.verbose));
-		} catch (err) {
-			defaultRuntime.error(danger(`Web login failed: ${String(err)}`));
-			defaultRuntime.exit(1);
-		}
-	});
-
-program
-	.command("send")
-	.description("Send a WhatsApp message")
-	.requiredOption(
-		"-t, --to <number>",
-		"Recipient number in E.164 (e.g. +15551234567)",
-	)
-	.requiredOption("-m, --message <text>", "Message body")
-	.option("-w, --wait <seconds>", "Wait for delivery status (0 to skip)", "20")
-	.option("-p, --poll <seconds>", "Polling interval while waiting", "2")
-	.option("--provider <provider>", "Provider: twilio | web", "twilio")
-	.addHelpText(
-		"after",
-		`
-Examples:
-  warelay send --to +15551234567 --message "Hi"                # wait 20s for delivery (default)
-  warelay send --to +15551234567 --message "Hi" --wait 0       # fire-and-forget
-  warelay send --to +15551234567 --message "Hi" --wait 60 --poll 3`,
-	)
-	.action(async (opts) => {
-		const deps = createDefaultDeps();
-		try {
-			await sendCommand(opts, deps, defaultRuntime);
-		} catch (err) {
-			defaultRuntime.error(String(err));
-			defaultRuntime.exit(1);
-		}
-	});
-
-program
-	.command("relay")
-	.description("Auto-reply to inbound messages (auto-selects web or twilio)")
-	.option("--provider <provider>", "auto | web | twilio", "auto")
-	.option("-i, --interval <seconds>", "Polling interval for twilio mode", "5")
-	.option(
-		"-l, --lookback <minutes>",
-		"Initial lookback window for twilio mode",
-		"5",
-	)
-	.option("--verbose", "Verbose logging", false)
-	.addHelpText(
-		"after",
-		`
-Examples:
-  warelay relay                     # auto: web if logged-in, else twilio poll
-  warelay relay --provider web      # force personal web session
-  warelay relay --provider twilio   # force twilio poll
-  warelay relay --provider twilio --interval 2 --lookback 30
-`,
-	)
-	.action(async (opts) => {
-		setVerbose(Boolean(opts.verbose));
-		const providerPref = String(opts.provider ?? "auto");
-		if (!["auto", "web", "twilio"].includes(providerPref)) {
-			defaultRuntime.error("--provider must be auto, web, or twilio");
-			defaultRuntime.exit(1);
-		}
-		const intervalSeconds = Number.parseInt(opts.interval, 10);
-		const lookbackMinutes = Number.parseInt(opts.lookback, 10);
-		if (Number.isNaN(intervalSeconds) || intervalSeconds <= 0) {
-			defaultRuntime.error("Interval must be a positive integer");
-			defaultRuntime.exit(1);
-		}
-		if (Number.isNaN(lookbackMinutes) || lookbackMinutes < 0) {
-			defaultRuntime.error("Lookback must be >= 0 minutes");
-			defaultRuntime.exit(1);
-		}
-
-		const provider = await pickProvider(providerPref as Provider | "auto");
-
-		if (provider === "web") {
-			defaultRuntime.log(info("Provider: web (personal WhatsApp Web session)"));
-			logWebSelfId();
-			try {
-				await monitorWebProvider(Boolean(opts.verbose));
-				return;
-			} catch (err) {
-				if (providerPref === "auto") {
-					defaultRuntime.error(
-						warn("Web session unavailable; falling back to twilio."),
-					);
-				} else {
-					defaultRuntime.error(danger(`Web relay failed: ${String(err)}`));
-					defaultRuntime.exit(1);
-				}
-			}
-		}
-
-		ensureTwilioEnv();
-		logTwilioFrom();
-		await monitorTwilio(intervalSeconds, lookbackMinutes);
-	});
-
-program
-	.command("status")
-	.description("Show recent WhatsApp messages (sent and received)")
-	.option("-l, --limit <count>", "Number of messages to show", "20")
-	.option("-b, --lookback <minutes>", "How far back to fetch messages", "240")
-	.option("--json", "Output JSON instead of text", false)
-	.addHelpText(
-		"after",
-		`
-Examples:
-  warelay status                            # last 20 msgs in past 4h
-  warelay status --limit 5 --lookback 30    # last 5 msgs in past 30m
-  warelay status --json --limit 50          # machine-readable output`,
-	)
-	.action(async (opts) => {
-		const deps = createDefaultDeps();
-		try {
-			await statusCommand(opts, deps, defaultRuntime);
-		} catch (err) {
-			defaultRuntime.error(String(err));
-			defaultRuntime.exit(1);
-		}
-	});
-
-program
-	.command("webhook")
-	.description(
-		"Run a local webhook server for inbound WhatsApp (works with Tailscale/port forward)",
-	)
-	.option("-p, --port <port>", "Port to listen on", "42873")
-	.option("-r, --reply <text>", "Optional auto-reply text")
-	.option("--path <path>", "Webhook path", "/webhook/whatsapp")
-	.option("--verbose", "Log inbound and auto-replies", false)
-	.option("-y, --yes", "Auto-confirm prompts when possible", false)
-	.addHelpText(
-		"after",
-		`
-Examples:
-  warelay webhook                       # listen on 42873
-  warelay webhook --port 45000          # pick a high, less-colliding port
-  warelay webhook --reply "Got it!"     # static auto-reply; otherwise use config file
-
-With Tailscale:
-  tailscale serve tcp 42873 127.0.0.1:42873
-  (then set Twilio webhook URL to your tailnet IP:42873/webhook/whatsapp)`,
-	)
-	// istanbul ignore next
-	.action(async (opts) => {
-		setVerbose(Boolean(opts.verbose));
-		setYes(Boolean(opts.yes));
-		const deps = createDefaultDeps();
-		try {
-			const server = await webhookCommand(opts, deps, defaultRuntime);
-			process.on("SIGINT", () => {
-				server.close(() => {
-					console.log("\n👋 Webhook stopped");
-					defaultRuntime.exit(0);
-				});
-			});
-			await deps.waitForever();
-		} catch (err) {
-			defaultRuntime.error(String(err));
-			defaultRuntime.exit(1);
-		}
-	});
-
-program
-	.command("up")
-	.description(
-		"Bring up webhook + Tailscale Funnel + Twilio callback (default webhook mode)",
-	)
-	.option("-p, --port <port>", "Port to listen on", "42873")
-	.option("--path <path>", "Webhook path", "/webhook/whatsapp")
-	.option("--verbose", "Verbose logging during setup/webhook", false)
-	.option("-y, --yes", "Auto-confirm prompts when possible", false)
-	// istanbul ignore next
-	.action(async (opts) => {
-		setVerbose(Boolean(opts.verbose));
-		setYes(Boolean(opts.yes));
-		const deps = createDefaultDeps();
-		try {
-			const { server } = await upCommand(opts, deps, defaultRuntime);
-			process.on("SIGINT", () => {
-				server.close(() => {
-					console.log("\n👋 Webhook stopped");
-					defaultRuntime.exit(0);
-				});
-			});
-			await deps.waitForever();
-		} catch (err) {
-			defaultRuntime.error(String(err));
-			defaultRuntime.exit(1);
-		}
-	});
 
 export {
 	assertProvider,
