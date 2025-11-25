@@ -11,7 +11,7 @@ Install from npm (global): `npm install -g warelay` (Node 22+). Then choose **on
 3. Stay online & auto-reply: `warelay relay --verbose` (defaults to Web when logged in, falls back to Twilio otherwise).
 
 **B) Twilio WhatsApp number (for delivery status + webhooks)**
-1. Copy `.env.example` → `.env`; set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` **or** `TWILIO_API_KEY`/`TWILIO_API_SECRET`, and `TWILIO_WHATSAPP_FROM=whatsapp:+15551234567` (optional `TWILIO_SENDER_SID`).
+1. Copy `.env.example` → `.env`; set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` **or** `TWILIO_API_KEY`/`TWILIO_API_SECRET`, and `TWILIO_WHATSAPP_FROM=whatsapp:+19995550123` (optional `TWILIO_SENDER_SID`).
 2. Send a message: `warelay send --to +12345550000 --message "Hi from warelay"`.
 3. Receive replies:
    - Polling (no ingress): `warelay relay --provider twilio --interval 5 --lookback 10`
