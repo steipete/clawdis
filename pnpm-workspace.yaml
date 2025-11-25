@@ -1,0 +1,3 @@
+onlyBuiltDependencies:
+  - '@whiskeysockets/baileys'
+  - sharp
