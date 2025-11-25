@@ -64,6 +64,12 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
 }
 ```
 
+### Claude CLI integration
+
+- When `command[0]` is `claude`, set `claudeOutputFormat` to `"text"`, `"json"`, or `"stream-json"` and warelay will inject `--output-format` and `-p/--print` automatically.
+- For `"json"`/`"stream-json"`, warelay now parses Claude's JSON payload and sends just the text content to WhatsApp while keeping the full JSON in logs for debugging.
+- If you omit `claudeOutputFormat`, warelay leaves your args untouched (useful for custom Claude flags).
+
 ### Simple text echo
 ```json5
 {
