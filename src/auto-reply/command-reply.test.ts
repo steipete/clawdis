@@ -139,6 +139,25 @@ describe("runCommandReply", () => {
     expect(meta.killed).toBe(true);
   });
 
+  it("includes cwd hint in timeout message", async () => {
+    const runner = vi.fn(async () => {
+      throw { stdout: "", killed: true, signal: "SIGKILL" };
+    });
+    const { payload } = await runCommandReply({
+      reply: { mode: "command", command: ["echo", "hi"], cwd: "/tmp/work" },
+      templatingCtx: noopTemplateCtx,
+      sendSystemOnce: false,
+      isNewSession: true,
+      isFirstTurnInSession: true,
+      systemSent: false,
+      timeoutMs: 5,
+      timeoutSeconds: 1,
+      commandRunner: runner,
+      enqueue: enqueueImmediate,
+    });
+    expect(payload?.text).toContain("(cwd: /tmp/work)");
+  });
+
   it("parses MEDIA tokens and respects mediaMaxMb for local files", async () => {
     const tmp = path.join(os.tmpdir(), `warelay-test-${Date.now()}.bin`);
     const bigBuffer = Buffer.alloc(2 * 1024 * 1024, 1);
@@ -185,5 +204,23 @@ describe("runCommandReply", () => {
     });
     expect(meta.claudeMeta).toContain("duration=50ms");
     expect(meta.claudeMeta).toContain("tool_calls=1");
+  });
+
+  it("captures queue wait metrics in meta", async () => {
+    const runner = makeRunner({ stdout: "ok" });
+    const { meta } = await runCommandReply({
+      reply: { mode: "command", command: ["echo", "{{Body}}"] },
+      templatingCtx: noopTemplateCtx,
+      sendSystemOnce: false,
+      isNewSession: true,
+      isFirstTurnInSession: true,
+      systemSent: false,
+      timeoutMs: 100,
+      timeoutSeconds: 1,
+      commandRunner: runner,
+      enqueue: enqueueImmediate,
+    });
+    expect(meta.queuedMs).toBe(25);
+    expect(meta.queuedAhead).toBe(2);
   });
 });
