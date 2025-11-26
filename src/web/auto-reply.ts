@@ -481,6 +481,14 @@ export async function monitorWebProvider(
           replyResolver,
           runtime,
         });
+        heartbeatLogger.info(
+          {
+            connectionId,
+            to: fallbackTo,
+            durationMs: Date.now() - tickStart,
+          },
+          "reply heartbeat sent (fallback session)",
+        );
         return;
       }
 
