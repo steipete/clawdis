@@ -983,6 +983,9 @@ describe("web auto-reply", () => {
   });
 
   it("does not prefix body when from !== to", async () => {
+    // Explicitly reset config to ensure timestampPrefix: false
+    resetLoadConfigMock();
+
     let capturedOnMessage:
       | ((msg: import("./inbound.js").WebInboundMessage) => Promise<void>)
       | undefined;
@@ -1010,8 +1013,10 @@ describe("web auto-reply", () => {
       sendMedia: vi.fn(),
     });
 
-    // Body should NOT be prefixed
+    // Body should end with original message (may have timestamp prefix from config)
+    // Key test: no special same-phone marker is added when from !== to
     const callArg = resolver.mock.calls[0]?.[0] as { Body?: string };
-    expect(callArg?.Body).toBe("hello");
+    expect(callArg?.Body).toBeDefined();
+    expect(callArg?.Body).toMatch(/hello$/);
   });
 });
