@@ -5,7 +5,7 @@ type TwilioRequestOptions = {
   method: "get" | "post";
   uri: string;
   params?: Record<string, string | number>;
-  form?: Record<string, string>;
+  data?: Record<string, string>;
   body?: unknown;
   contentType?: string;
 };
@@ -32,18 +32,21 @@ export async function sendTypingIndicator(
     logVerbose("Skipping typing indicator: missing MessageSid");
     return { sent: false };
   }
+
+  // Always log that we're attempting to send (helps debug when indicators aren't working)
+  runtime.log(`📝 Sending typing indicator for message ${messageSid}...`);
+
   try {
     const response = await client.request({
       method: "post",
       uri: "https://messaging.twilio.com/v2/Indicators/Typing.json",
-      form: {
+      data: {
         messageId: messageSid,
         channel: "whatsapp",
       },
     });
-    logVerbose(
-      `Sent typing indicator for inbound ${messageSid} (response: ${JSON.stringify(response)})`,
-    );
+    runtime.log(`✅ Typing indicator sent for ${messageSid}`);
+    logVerbose(`Typing indicator response: ${JSON.stringify(response)}`);
     return { sent: true, response };
   } catch (err) {
     // Always log typing indicator failures (not just in verbose mode) since

@@ -1,6 +1,6 @@
 {
   "name": "warelay",
-  "version": "1.2.2",
+  "version": "1.2.3-typing-fix",
   "description": "WhatsApp relay CLI (send, monitor, webhook, auto-reply) using Twilio",
   "type": "module",
   "main": "dist/index.js",

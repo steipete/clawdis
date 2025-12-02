@@ -34,6 +34,7 @@ import {
 } from "./infra/tailscale.js";
 import { runCommandWithTimeout, runExec } from "./process/exec.js";
 import { monitorWebProvider } from "./provider-web.js";
+import { defaultRuntime } from "./runtime.js";
 import { createClient } from "./twilio/client.js";
 import {
   formatMessageLine,
@@ -70,6 +71,7 @@ export {
   autoReplyIfConfigured,
   applyTemplate,
   createClient,
+  defaultRuntime,
   deriveSessionKey,
   describePortOwner,
   ensureBinary,

@@ -14,8 +14,8 @@ import { info, isVerbose, logVerbose } from "../globals.js";
 import { ensureMediaHosted } from "../media/host.js";
 import { runCommandWithTimeout } from "../process/exec.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
-import type { TwilioRequester } from "../twilio/types.js";
 import { splitMessage } from "../twilio/send.js";
+import type { TwilioRequester } from "../twilio/types.js";
 import { sendTypingIndicator } from "../twilio/typing.js";
 import { runCommandReply } from "./command-reply.js";
 import {
@@ -62,13 +62,27 @@ export async function getReplyFromConfig(
     }
   };
   const startTypingLoop = async () => {
-    if (!opts?.onReplyStart) return;
-    if (typingIntervalMs <= 0) return;
-    if (typingTimer) return;
+    if (!opts?.onReplyStart) {
+      logVerbose("startTypingLoop: no onReplyStart callback provided");
+      return;
+    }
+    if (typingTimer) {
+      logVerbose("startTypingLoop: timer already running");
+      return;
+    }
+    // Always trigger typing immediately when processing starts
+    logVerbose("startTypingLoop: triggering initial typing indicator");
     await triggerTyping();
-    typingTimer = setInterval(() => {
-      void triggerTyping();
-    }, typingIntervalMs);
+
+    // Only set up interval loop for command mode (where typingIntervalMs > 0)
+    if (typingIntervalMs > 0) {
+      logVerbose(
+        `startTypingLoop: starting ${typingIntervalMs}ms refresh interval`,
+      );
+      typingTimer = setInterval(() => {
+        void triggerTyping();
+      }, typingIntervalMs);
+    }
   };
   let transcribedText: string | undefined;
 
