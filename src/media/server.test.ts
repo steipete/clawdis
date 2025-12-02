@@ -49,4 +49,14 @@ describe("media server", () => {
     await expect(fs.stat(file)).rejects.toThrow();
     await new Promise((r) => server.close(r));
   });
+
+  it("blocks path traversal attempts", async () => {
+    const server = await startMediaServer(0, 5_000);
+    const port = (server.address() as AddressInfo).port;
+    // URL-encoded "../" to bypass client-side path normalization
+    const res = await fetch(`http://localhost:${port}/media/%2e%2e%2fpackage.json`);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toBe("invalid path");
+    await new Promise((r) => server.close(r));
+  });
 });

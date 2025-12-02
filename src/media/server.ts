@@ -17,7 +17,12 @@ export function attachMediaRoutes(
 
   app.get("/media/:id", async (req, res) => {
     const id = req.params.id;
-    const file = path.join(mediaDir, id);
+    const file = path.resolve(mediaDir, id);
+    const mediaRoot = path.resolve(mediaDir) + path.sep;
+    if (!file.startsWith(mediaRoot)) {
+      res.status(400).send("invalid path");
+      return;
+    }
     try {
       const stat = await fs.stat(file);
       if (Date.now() - stat.mtimeMs > ttlMs) {
