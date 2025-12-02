@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import readline from "node:readline";
 
 type TauRpcOptions = {
@@ -22,7 +22,10 @@ class TauRpcClient {
       }
     | undefined;
 
-  constructor(private readonly argv: string[], private readonly cwd: string | undefined) {}
+  constructor(
+    private readonly argv: string[],
+    private readonly cwd: string | undefined,
+  ) {}
 
   private ensureChild() {
     if (this.child) return;
@@ -37,7 +40,9 @@ class TauRpcClient {
     });
     this.child.on("exit", (code, signal) => {
       if (this.pending) {
-        this.pending.reject(new Error(`tau rpc exited (code=${code}, signal=${signal})`));
+        this.pending.reject(
+          new Error(`tau rpc exited (code=${code}, signal=${signal})`),
+        );
         clearTimeout(this.pending.timer);
         this.pending = undefined;
       }
@@ -49,7 +54,10 @@ class TauRpcClient {
     if (!this.pending) return;
     this.buffer.push(line);
     // Finish on assistant message_end event to mirror parse logic in piSpec
-    if (line.includes('"type":"message_end"') && line.includes('"role":"assistant"')) {
+    if (
+      line.includes('"type":"message_end"') &&
+      line.includes('"role":"assistant"')
+    ) {
       const out = this.buffer.join("\n");
       clearTimeout(this.pending.timer);
       const pending = this.pending;
@@ -64,13 +72,14 @@ class TauRpcClient {
     if (this.pending) {
       throw new Error("tau rpc already handling a request");
     }
-    const child = this.child!;
+    const child = this.child;
+    if (!child) throw new Error("tau rpc child not initialized");
     await new Promise<void>((resolve, reject) => {
       const ok = child.stdin.write(
-        JSON.stringify({
+        `${JSON.stringify({
           type: "prompt",
           message: { role: "user", content: [{ type: "text", text: prompt }] },
-        }) + "\n",
+        })}\n`,
         (err) => (err ? reject(err) : resolve()),
       );
       if (!ok) child.stdin.once("drain", () => resolve());

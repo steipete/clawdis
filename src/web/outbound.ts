@@ -41,7 +41,7 @@ export async function sendMessageWeb(
         const mimetype =
           media.contentType === "audio/ogg"
             ? "audio/ogg; codecs=opus"
-            : media.contentType ?? "application/octet-stream";
+            : (media.contentType ?? "application/octet-stream");
         payload = { audio: media.buffer, ptt: true, mimetype };
       } else if (media.kind === "video") {
         const mimetype = media.contentType ?? "application/octet-stream";
