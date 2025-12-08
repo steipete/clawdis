@@ -121,10 +121,12 @@ class TauRpcClient {
     const child = this.child;
     if (!child) throw new Error("tau rpc child not initialized");
     await new Promise<void>((resolve, reject) => {
+      // Pi-agent-core's Agent.prompt() expects a plain string, not a structured message.
+      // The RPC handler in pi-coding-agent passes input.message directly to agent.prompt().
       const ok = child.stdin.write(
         `${JSON.stringify({
           type: "prompt",
-          message: { role: "user", content: [{ type: "text", text: prompt }] },
+          message: prompt,
         })}\n`,
         (err) => (err ? reject(err) : resolve()),
       );
