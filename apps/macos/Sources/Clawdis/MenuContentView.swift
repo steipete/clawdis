@@ -271,7 +271,7 @@ struct MenuContent: View {
 
     @ViewBuilder
     private var contextCardView: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Context")
                     .font(.caption.weight(.semibold))
@@ -287,7 +287,7 @@ struct MenuContent: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(self.contextSessions) { row in
                         self.contextSessionRow(row)
                     }
@@ -316,22 +316,27 @@ struct MenuContent: View {
     private func contextSessionRow(_ row: SessionRow) -> some View {
         let width = self.contextPillWidth
         VStack(alignment: .leading, spacing: 4) {
-            ContextUsageBar(
-                usedTokens: row.tokens.total,
-                contextTokens: row.tokens.contextTokens,
-                width: width,
-                height: self.contextBarHeight)
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(row.key)
-                    .font(.caption2.weight(row.key == "main" ? .semibold : .regular))
+                    .font(.caption.weight(row.key == "main" ? .semibold : .regular))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .layoutPriority(1)
                 Spacer(minLength: 8)
                 Text(row.tokens.contextSummaryShort)
-                    .font(.caption2.monospacedDigit())
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
             }
+            .frame(width: width)
+
+            ContextUsageBar(
+                usedTokens: row.tokens.total,
+                contextTokens: row.tokens.contextTokens,
+                width: width,
+                height: self.contextBarHeight)
         }
         .frame(width: width)
     }
