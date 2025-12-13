@@ -1,5 +1,6 @@
 import ClawdisKit
 import SwiftUI
+import UIKit
 
 @MainActor
 private final class ConnectStatusStore: ObservableObject {
@@ -43,7 +44,16 @@ struct SettingsTab: View {
                     if let serverName = self.appModel.bridgeServerName {
                         LabeledContent("Server", value: serverName)
                         if let addr = self.appModel.bridgeRemoteAddress {
-                            LabeledContent("Address", value: addr)
+                            LabeledContent("Address") {
+                                Text(addr)
+                            }
+                            .contextMenu {
+                                Button {
+                                    UIPasteboard.general.string = addr
+                                } label: {
+                                    Label("Copy", systemImage: "doc.on.doc")
+                                }
+                            }
                         }
 
                         Button("Disconnect", role: .destructive) {

@@ -27,10 +27,30 @@ actor BridgeSession {
     private static func prettyRemoteEndpoint(_ endpoint: NWEndpoint) -> String? {
         switch endpoint {
         case let .hostPort(host, port):
-            "\(host):\(port)".replacingOccurrences(of: "::ffff:", with: "")
+            let hostString = Self.prettyHostString(host)
+            if hostString.contains(":") {
+                return "[\(hostString)]:\(port)"
+            }
+            return "\(hostString):\(port)"
         default:
-            String(describing: endpoint)
+            return String(describing: endpoint)
         }
+    }
+
+    private static func prettyHostString(_ host: NWEndpoint.Host) -> String {
+        var hostString = String(describing: host)
+        hostString = hostString.replacingOccurrences(of: "::ffff:", with: "")
+
+        guard let percentIndex = hostString.firstIndex(of: "%") else { return hostString }
+
+        let prefix = hostString[..<percentIndex]
+        let allowed = CharacterSet(charactersIn: "0123456789abcdefABCDEF:.")
+        let isIPAddressPrefix = prefix.unicodeScalars.allSatisfy { allowed.contains($0) }
+        if isIPAddressPrefix {
+            return String(prefix)
+        }
+
+        return hostString
     }
 
     func connect(
