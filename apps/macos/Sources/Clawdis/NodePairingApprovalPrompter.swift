@@ -80,6 +80,9 @@ final class NodePairingApprovalPrompter {
         alert.addButton(withTitle: "Approve")
         alert.addButton(withTitle: "Reject")
         alert.addButton(withTitle: "Later")
+        if #available(macOS 11.0, *), alert.buttons.indices.contains(1) {
+            alert.buttons[1].hasDestructiveAction = true
+        }
 
         let response = alert.runModal()
         Task { [weak self] in

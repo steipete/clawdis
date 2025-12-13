@@ -307,6 +307,9 @@ enum BridgePairingApprover {
             """
             alert.addButton(withTitle: "Approve")
             alert.addButton(withTitle: "Reject")
+            if #available(macOS 11.0, *), alert.buttons.indices.contains(1) {
+                alert.buttons[1].hasDestructiveAction = true
+            }
             let resp = alert.runModal()
             cont.resume(returning: resp == .alertFirstButtonReturn)
         }
