@@ -13,6 +13,7 @@ enum LaunchAgentManager {
     }
 
     static func set(enabled: Bool, bundlePath: String) async {
+        if ProcessInfo.processInfo.isNixMode { return }
         if enabled {
             self.writePlist(bundlePath: bundlePath)
             _ = await self.runLaunchctl(["bootout", "gui/\(getuid())/\(launchdLabel)"])
