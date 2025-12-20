@@ -50,9 +50,8 @@ enum GatewayLaunchAgentManager {
     private static func writePlist(bundlePath: String, port: Int) {
         let gatewayBin = self.gatewayExecutablePath(bundlePath: bundlePath)
         let relayDir = self.relayDir(bundlePath: bundlePath)
-        let preferredPath =
-            ([relayDir] + CommandResolver.preferredPaths())
-                .joined(separator: ":")
+        let preferredPath = ([relayDir] + CommandResolver.preferredPaths())
+            .joined(separator: ":")
         let plist = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -83,7 +83,7 @@ struct SkillsSettings: View {
                             isPrimary: isPrimary)
                     })
             }
-            if !self.model.skills.isEmpty && self.filteredSkills.isEmpty {
+            if !self.model.skills.isEmpty, self.filteredSkills.isEmpty {
                 Text("No skills match this filter.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -143,13 +143,13 @@ private enum SkillsFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            "All"
         case .ready:
-            return "Ready"
+            "Ready"
         case .needsSetup:
-            return "Needs Setup"
+            "Needs Setup"
         case .disabled:
-            return "Disabled"
+            "Disabled"
         }
     }
 }
@@ -210,15 +210,15 @@ private struct SkillRow: View {
     private var sourceLabel: String {
         switch self.skill.source {
         case "clawdis-bundled":
-            return "Bundled"
+            "Bundled"
         case "clawdis-managed":
-            return "Managed"
+            "Managed"
         case "clawdis-workspace":
-            return "Workspace"
+            "Workspace"
         case "clawdis-extra":
-            return "Extra"
+            "Extra"
         default:
-            return self.skill.source
+            self.skill.source
         }
     }
 
