@@ -29,6 +29,10 @@ final class WebChatManager {
 
     var onPanelVisibilityChanged: ((Bool) -> Void)?
 
+    var activeSessionKey: String? {
+        self.panelSessionKey ?? self.windowSessionKey
+    }
+
     func show(sessionKey: String) {
         self.closePanel()
         if let controller = self.windowController {

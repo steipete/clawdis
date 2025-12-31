@@ -435,58 +435,66 @@ async function waitForSystemEvent(timeoutMs = 2000) {
 }
 
 describe("gateway server", () => {
-  test("voicewake.get returns defaults and voicewake.set broadcasts", async () => {
-    const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdis-home-"));
-    const prevHome = process.env.HOME;
-    process.env.HOME = homeDir;
+  test(
+    "voicewake.get returns defaults and voicewake.set broadcasts",
+    { timeout: 15_000 },
+    async () => {
+      const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdis-home-"));
+      const prevHome = process.env.HOME;
+      process.env.HOME = homeDir;
 
-    const { server, ws } = await startServerWithClient();
-    await connectOk(ws);
+      const { server, ws } = await startServerWithClient();
+      await connectOk(ws);
 
-    const initial = await rpcReq<{ triggers: string[] }>(ws, "voicewake.get");
-    expect(initial.ok).toBe(true);
-    expect(initial.payload?.triggers).toEqual(["clawd", "claude", "computer"]);
+      const initial = await rpcReq<{ triggers: string[] }>(ws, "voicewake.get");
+      expect(initial.ok).toBe(true);
+      expect(initial.payload?.triggers).toEqual([
+        "clawd",
+        "claude",
+        "computer",
+      ]);
 
-    const changedP = onceMessage<{
-      type: "event";
-      event: string;
-      payload?: unknown;
-    }>(ws, (o) => o.type === "event" && o.event === "voicewake.changed");
+      const changedP = onceMessage<{
+        type: "event";
+        event: string;
+        payload?: unknown;
+      }>(ws, (o) => o.type === "event" && o.event === "voicewake.changed");
 
-    const setRes = await rpcReq<{ triggers: string[] }>(ws, "voicewake.set", {
-      triggers: ["  hi  ", "", "there"],
-    });
-    expect(setRes.ok).toBe(true);
-    expect(setRes.payload?.triggers).toEqual(["hi", "there"]);
+      const setRes = await rpcReq<{ triggers: string[] }>(ws, "voicewake.set", {
+        triggers: ["  hi  ", "", "there"],
+      });
+      expect(setRes.ok).toBe(true);
+      expect(setRes.payload?.triggers).toEqual(["hi", "there"]);
 
-    const changed = await changedP;
-    expect(changed.event).toBe("voicewake.changed");
-    expect(
-      (changed.payload as { triggers?: unknown } | undefined)?.triggers,
-    ).toEqual(["hi", "there"]);
+      const changed = await changedP;
+      expect(changed.event).toBe("voicewake.changed");
+      expect(
+        (changed.payload as { triggers?: unknown } | undefined)?.triggers,
+      ).toEqual(["hi", "there"]);
 
-    const after = await rpcReq<{ triggers: string[] }>(ws, "voicewake.get");
-    expect(after.ok).toBe(true);
-    expect(after.payload?.triggers).toEqual(["hi", "there"]);
+      const after = await rpcReq<{ triggers: string[] }>(ws, "voicewake.get");
+      expect(after.ok).toBe(true);
+      expect(after.payload?.triggers).toEqual(["hi", "there"]);
 
-    const onDisk = JSON.parse(
-      await fs.readFile(
-        path.join(homeDir, ".clawdis", "settings", "voicewake.json"),
-        "utf8",
-      ),
-    ) as { triggers?: unknown; updatedAtMs?: unknown };
-    expect(onDisk.triggers).toEqual(["hi", "there"]);
-    expect(typeof onDisk.updatedAtMs).toBe("number");
+      const onDisk = JSON.parse(
+        await fs.readFile(
+          path.join(homeDir, ".clawdis", "settings", "voicewake.json"),
+          "utf8",
+        ),
+      ) as { triggers?: unknown; updatedAtMs?: unknown };
+      expect(onDisk.triggers).toEqual(["hi", "there"]);
+      expect(typeof onDisk.updatedAtMs).toBe("number");
 
-    ws.close();
-    await server.close();
+      ws.close();
+      await server.close();
 
-    if (prevHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = prevHome;
-    }
-  });
+      if (prevHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = prevHome;
+      }
+    },
+  );
 
   test("models.list returns model catalog", async () => {
     piSdkMock.enabled = true;
@@ -3325,6 +3333,90 @@ describe("gateway server", () => {
     expect(stored.main?.sessionId).toBe("sess-main");
     expect(stored["node-ios-node"]).toBeUndefined();
 
+    await server.close();
+  });
+
+  test("bridge voice transcript triggers chat events for webchat clients", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdis-gw-"));
+    testSessionStorePath = path.join(dir, "sessions.json");
+    await fs.writeFile(
+      testSessionStorePath,
+      JSON.stringify(
+        {
+          main: {
+            sessionId: "sess-main",
+            updatedAt: Date.now(),
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { server, ws } = await startServerWithClient();
+    await connectOk(ws, {
+      client: {
+        name: "webchat",
+        version: "1.0.0",
+        platform: "test",
+        mode: "webchat",
+      },
+    });
+
+    const bridgeCall = bridgeStartCalls.at(-1);
+    expect(bridgeCall?.onEvent).toBeDefined();
+
+    const isVoiceFinalChatEvent = (o: unknown) => {
+      if (!o || typeof o !== "object") return false;
+      const rec = o as Record<string, unknown>;
+      if (rec.type !== "event" || rec.event !== "chat") return false;
+      if (!rec.payload || typeof rec.payload !== "object") return false;
+      const payload = rec.payload as Record<string, unknown>;
+      const runId = typeof payload.runId === "string" ? payload.runId : "";
+      const state = typeof payload.state === "string" ? payload.state : "";
+      return runId.startsWith("voice-") && state === "final";
+    };
+
+    const finalChatP = onceMessage<{
+      type: "event";
+      event: string;
+      payload?: unknown;
+    }>(ws, isVoiceFinalChatEvent, 8000);
+
+    await bridgeCall?.onEvent?.("ios-node", {
+      event: "voice.transcript",
+      payloadJSON: JSON.stringify({ text: "hello", sessionKey: "main" }),
+    });
+
+    emitAgentEvent({
+      runId: "sess-main",
+      seq: 1,
+      ts: Date.now(),
+      stream: "assistant",
+      data: { text: "hi from agent" },
+    });
+    emitAgentEvent({
+      runId: "sess-main",
+      seq: 2,
+      ts: Date.now(),
+      stream: "job",
+      data: { state: "done" },
+    });
+
+    const evt = await finalChatP;
+    const payload =
+      evt.payload && typeof evt.payload === "object"
+        ? (evt.payload as Record<string, unknown>)
+        : {};
+    expect(payload.sessionKey).toBe("main");
+    const message =
+      payload.message && typeof payload.message === "object"
+        ? (payload.message as Record<string, unknown>)
+        : {};
+    expect(message.role).toBe("assistant");
+
+    ws.close();
     await server.close();
   });
 

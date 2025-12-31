@@ -52,12 +52,17 @@ import Testing
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: nodePath.path)
         try self.makeExec(at: scriptPath)
 
-        let cmd = CommandResolver.clawdisCommand(subcommand: "rpc", defaults: defaults)
+        let cmd = CommandResolver.clawdisCommand(
+            subcommand: "rpc",
+            defaults: defaults,
+            searchPaths: [tmp.appendingPathComponent("node_modules/.bin").path])
 
         #expect(cmd.count >= 3)
-        #expect(cmd[0] == nodePath.path)
-        #expect(cmd[1] == scriptPath.path)
-        #expect(cmd[2] == "rpc")
+        if cmd.count >= 3 {
+            #expect(cmd[0] == nodePath.path)
+            #expect(cmd[1] == scriptPath.path)
+            #expect(cmd[2] == "rpc")
+        }
     }
 
     @Test func fallsBackToPnpm() async throws {

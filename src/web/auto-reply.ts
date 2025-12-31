@@ -1361,6 +1361,11 @@ export async function monitorWebProvider(
             void closeListener().catch((err) => {
               logVerbose(`Close listener failed: ${formatError(err)}`);
             }); // Trigger reconnect
+            listener.signalClose?.({
+              status: 499,
+              isLoggedOut: false,
+              error: "watchdog-timeout",
+            });
           }
         }
       }, WATCHDOG_CHECK_MS);

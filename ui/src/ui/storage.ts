@@ -1,9 +1,12 @@
 const KEY = "clawdis.control.settings.v1";
 
+import type { ThemeMode } from "./theme";
+
 export type UiSettings = {
   gatewayUrl: string;
   token: string;
   sessionKey: string;
+  theme: ThemeMode;
 };
 
 export function loadSettings(): UiSettings {
@@ -16,6 +19,7 @@ export function loadSettings(): UiSettings {
     gatewayUrl: defaultUrl,
     token: "",
     sessionKey: "main",
+    theme: "system",
   };
 
   try {
@@ -32,6 +36,12 @@ export function loadSettings(): UiSettings {
         typeof parsed.sessionKey === "string" && parsed.sessionKey.trim()
           ? parsed.sessionKey.trim()
           : defaults.sessionKey,
+      theme:
+        parsed.theme === "light" ||
+        parsed.theme === "dark" ||
+        parsed.theme === "system"
+          ? parsed.theme
+          : defaults.theme,
     };
   } catch {
     return defaults;

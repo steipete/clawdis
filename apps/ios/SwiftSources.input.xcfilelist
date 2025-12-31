@@ -54,4 +54,7 @@ Sources/Voice/VoiceWakePreferences.swift
 ../shared/ClawdisKit/Sources/ClawdisKit/ScreenCommands.swift
 ../shared/ClawdisKit/Sources/ClawdisKit/StoragePaths.swift
 ../shared/ClawdisKit/Sources/ClawdisKit/SystemCommands.swift
+../shared/ClawdisKit/Sources/ClawdisKit/TalkDirective.swift
 ../../Swabble/Sources/SwabbleKit/WakeWordGate.swift
+Sources/Voice/TalkModeManager.swift
+Sources/Voice/TalkOrbOverlay.swift

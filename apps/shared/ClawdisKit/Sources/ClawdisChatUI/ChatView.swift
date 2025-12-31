@@ -9,10 +9,12 @@ public struct ClawdisChatView: View {
 
     @State private var viewModel: ClawdisChatViewModel
     @State private var scrollerBottomID = UUID()
+    @State private var scrollPosition: UUID?
     @State private var showSessions = false
     @State private var hasPerformedInitialScroll = false
     private let showsSessionSwitcher: Bool
     private let style: Style
+    private let userAccent: Color?
 
     private enum Layout {
         #if os(macOS)
@@ -37,11 +39,13 @@ public struct ClawdisChatView: View {
     public init(
         viewModel: ClawdisChatViewModel,
         showsSessionSwitcher: Bool = false,
-        style: Style = .standard)
+        style: Style = .standard,
+        userAccent: Color? = nil)
     {
         self._viewModel = State(initialValue: viewModel)
         self.showsSessionSwitcher = showsSessionSwitcher
         self.style = style
+        self.userAccent = userAccent
     }
 
     public var body: some View {
@@ -56,6 +60,7 @@ public struct ClawdisChatView: View {
             .padding(.horizontal, Layout.outerPaddingHorizontal)
             .padding(.vertical, Layout.outerPaddingVertical)
             .frame(maxWidth: .infinity)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { self.viewModel.load() }
@@ -69,68 +74,78 @@ public struct ClawdisChatView: View {
     }
 
     private var messageList: some View {
-        ScrollViewReader { proxy in
-            ZStack {
-                ScrollView {
-                    LazyVStack(spacing: Layout.messageSpacing) {
-                        ForEach(self.visibleMessages) { msg in
-                            ChatMessageBubble(message: msg, style: self.style)
-                                .frame(
-                                    maxWidth: .infinity,
-                                    alignment: msg.role.lowercased() == "user" ? .trailing : .leading)
-                        }
-
-                        if self.viewModel.pendingRunCount > 0 {
-                            HStack {
-                                ChatTypingIndicatorBubble(style: self.style)
-                                    .equatable()
-                                Spacer(minLength: 0)
-                            }
-                        }
-
-                        if !self.viewModel.pendingToolCalls.isEmpty {
-                            ChatPendingToolsBubble(toolCalls: self.viewModel.pendingToolCalls)
-                                .equatable()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-
-                        if let text = self.viewModel.streamingAssistantText, !text.isEmpty {
-                            ChatStreamingAssistantBubble(text: text)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-
-                        Color.clear
-                            .frame(height: Layout.messageListPaddingBottom + 1)
-                            .id(self.scrollerBottomID)
-                    }
-                    .padding(.top, Layout.messageListPaddingTop)
-                    .padding(.horizontal, Layout.messageListPaddingHorizontal)
+        ZStack {
+            ScrollView {
+                LazyVStack(spacing: Layout.messageSpacing) {
+                    self.messageListRows
                 }
-
-                if self.viewModel.isLoading {
-                    ProgressView()
-                        .controlSize(.large)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                // Use scroll targets for stable auto-scroll without ScrollViewReader relayout glitches.
+                .scrollTargetLayout()
+                .padding(.top, Layout.messageListPaddingTop)
+                .padding(.horizontal, Layout.messageListPaddingHorizontal)
             }
-            .onChange(of: self.viewModel.isLoading) { _, isLoading in
-                guard !isLoading, !self.hasPerformedInitialScroll else { return }
-                proxy.scrollTo(self.scrollerBottomID, anchor: .bottom)
-                self.hasPerformedInitialScroll = true
-            }
-            .onChange(of: self.viewModel.messages.count) { _, _ in
-                guard self.hasPerformedInitialScroll else { return }
-                withAnimation(.snappy(duration: 0.22)) {
-                    proxy.scrollTo(self.scrollerBottomID, anchor: .bottom)
-                }
-            }
-            .onChange(of: self.viewModel.pendingRunCount) { _, _ in
-                guard self.hasPerformedInitialScroll else { return }
-                withAnimation(.snappy(duration: 0.22)) {
-                    proxy.scrollTo(self.scrollerBottomID, anchor: .bottom)
-                }
+            // Keep the scroll pinned to the bottom for new messages.
+            .scrollPosition(id: self.$scrollPosition, anchor: .bottom)
+
+            if self.viewModel.isLoading {
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        // Ensure the message list claims vertical space on the first layout pass.
+        .frame(maxHeight: .infinity, alignment: .top)
+        .layoutPriority(1)
+        .onChange(of: self.viewModel.isLoading) { _, isLoading in
+            guard !isLoading, !self.hasPerformedInitialScroll else { return }
+            self.scrollPosition = self.scrollerBottomID
+            self.hasPerformedInitialScroll = true
+        }
+        .onChange(of: self.viewModel.messages.count) { _, _ in
+            guard self.hasPerformedInitialScroll else { return }
+            withAnimation(.snappy(duration: 0.22)) {
+                self.scrollPosition = self.scrollerBottomID
+            }
+        }
+        .onChange(of: self.viewModel.pendingRunCount) { _, _ in
+            guard self.hasPerformedInitialScroll else { return }
+            withAnimation(.snappy(duration: 0.22)) {
+                self.scrollPosition = self.scrollerBottomID
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var messageListRows: some View {
+        ForEach(self.visibleMessages) { msg in
+            ChatMessageBubble(message: msg, style: self.style, userAccent: self.userAccent)
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: msg.role.lowercased() == "user" ? .trailing : .leading)
+        }
+
+        if self.viewModel.pendingRunCount > 0 {
+            HStack {
+                ChatTypingIndicatorBubble(style: self.style)
+                    .equatable()
+                Spacer(minLength: 0)
+            }
+        }
+
+        if !self.viewModel.pendingToolCalls.isEmpty {
+            ChatPendingToolsBubble(toolCalls: self.viewModel.pendingToolCalls)
+                .equatable()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
+        if let text = self.viewModel.streamingAssistantText, !text.isEmpty {
+            ChatStreamingAssistantBubble(text: text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
+        Color.clear
+            .frame(height: Layout.messageListPaddingBottom + 1)
+            .id(self.scrollerBottomID)
     }
 
     private var visibleMessages: [ClawdisChatMessage] {

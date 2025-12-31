@@ -15,7 +15,7 @@
   align-items: center;
   padding: 18px 24px;
   border-bottom: 1px solid var(--border);
-  background: rgba(10, 14, 20, 0.75);
+  background: var(--chrome);
   backdrop-filter: blur(16px);
 }
 
@@ -40,7 +40,7 @@
   grid-area: nav;
   padding: 18px 16px;
   border-right: 1px solid var(--border);
-  background: rgba(10, 14, 20, 0.8);
+  background: var(--chrome-strong);
 }
 
 .nav-group {
@@ -197,4 +197,3 @@
     grid-template-columns: 1fr;
   }
 }
-

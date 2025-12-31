@@ -339,6 +339,14 @@ export const ConfigSetParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const TalkModeParamsSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    phase: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
 export const ProvidersStatusParamsSchema = Type.Object(
   {
     probe: Type.Optional(Type.Boolean()),
@@ -668,6 +676,7 @@ export const ProtocolSchemas: Record<string, TSchema> = {
   SessionsCompactParams: SessionsCompactParamsSchema,
   ConfigGetParams: ConfigGetParamsSchema,
   ConfigSetParams: ConfigSetParamsSchema,
+  TalkModeParams: TalkModeParamsSchema,
   ProvidersStatusParams: ProvidersStatusParamsSchema,
   WebLoginStartParams: WebLoginStartParamsSchema,
   WebLoginWaitParams: WebLoginWaitParamsSchema,
@@ -724,6 +733,7 @@ export type SessionsDeleteParams = Static<typeof SessionsDeleteParamsSchema>;
 export type SessionsCompactParams = Static<typeof SessionsCompactParamsSchema>;
 export type ConfigGetParams = Static<typeof ConfigGetParamsSchema>;
 export type ConfigSetParams = Static<typeof ConfigSetParamsSchema>;
+export type TalkModeParams = Static<typeof TalkModeParamsSchema>;
 export type ProvidersStatusParams = Static<typeof ProvidersStatusParamsSchema>;
 export type WebLoginStartParams = Static<typeof WebLoginStartParamsSchema>;
 export type WebLoginWaitParams = Static<typeof WebLoginWaitParamsSchema>;

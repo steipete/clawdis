@@ -51,6 +51,7 @@ actor GatewayConnection {
         case providersStatus = "providers.status"
         case configGet = "config.get"
         case configSet = "config.set"
+        case talkMode = "talk.mode"
         case webLoginStart = "web.login.start"
         case webLoginWait = "web.login.wait"
         case webLogout = "web.logout"
@@ -472,7 +473,10 @@ extension GatewayConnection {
             params["attachments"] = AnyCodable(encoded)
         }
 
-        return try await self.requestDecoded(method: .chatSend, params: params)
+        return try await self.requestDecoded(
+            method: .chatSend,
+            params: params,
+            timeoutMs: Double(timeoutMs))
     }
 
     func chatAbort(sessionKey: String, runId: String) async throws -> Bool {
@@ -481,6 +485,12 @@ extension GatewayConnection {
             method: .chatAbort,
             params: ["sessionKey": AnyCodable(sessionKey), "runId": AnyCodable(runId)])
         return res.aborted ?? false
+    }
+
+    func talkMode(enabled: Bool, phase: String? = nil) async {
+        var params: [String: AnyCodable] = ["enabled": AnyCodable(enabled)]
+        if let phase { params["phase"] = AnyCodable(phase) }
+        try? await self.requestVoid(method: .talkMode, params: params)
     }
 
     // MARK: - VoiceWake

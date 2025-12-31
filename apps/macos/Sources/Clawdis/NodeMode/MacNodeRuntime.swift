@@ -265,7 +265,7 @@ actor MacNodeRuntime {
         guard let raw = await GatewayConnection.shared.canvasHostUrl() else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let baseUrl = URL(string: trimmed) else { return nil }
-        return baseUrl.appendingPathComponent("__clawdis__/a2ui/").absoluteString
+        return baseUrl.appendingPathComponent("__clawdis__/a2ui/").absoluteString + "?platform=macos"
     }
 
     private func isA2UIReady(poll: Bool = false) async -> Bool {

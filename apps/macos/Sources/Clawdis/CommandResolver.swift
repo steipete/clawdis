@@ -16,6 +16,10 @@ enum CommandResolver {
         RuntimeLocator.resolve(searchPaths: self.preferredPaths())
     }
 
+    static func runtimeResolution(searchPaths: [String]?) -> Result<RuntimeResolution, RuntimeResolutionError> {
+        RuntimeLocator.resolve(searchPaths: searchPaths ?? self.preferredPaths())
+    }
+
     static func makeRuntimeCommand(
         runtime: RuntimeResolution,
         entrypoint: String,
@@ -152,8 +156,8 @@ enum CommandResolver {
         return paths
     }
 
-    static func findExecutable(named name: String) -> String? {
-        for dir in self.preferredPaths() {
+    static func findExecutable(named name: String, searchPaths: [String]? = nil) -> String? {
+        for dir in (searchPaths ?? self.preferredPaths()) {
             let candidate = (dir as NSString).appendingPathComponent(name)
             if FileManager.default.isExecutableFile(atPath: candidate) {
                 return candidate
@@ -162,8 +166,14 @@ enum CommandResolver {
         return nil
     }
 
-    static func clawdisExecutable() -> String? {
-        self.findExecutable(named: self.helperName)
+    static func clawdisExecutable(searchPaths: [String]? = nil) -> String? {
+        self.findExecutable(named: self.helperName, searchPaths: searchPaths)
+    }
+
+    static func projectClawdisExecutable(projectRoot: URL? = nil) -> String? {
+        let root = projectRoot ?? self.projectRoot()
+        let candidate = root.appendingPathComponent("node_modules/.bin").appendingPathComponent(self.helperName).path
+        return FileManager.default.isExecutableFile(atPath: candidate) ? candidate : nil
     }
 
     static func nodeCliPath() -> String? {
@@ -171,17 +181,18 @@ enum CommandResolver {
         return FileManager.default.isReadableFile(atPath: candidate) ? candidate : nil
     }
 
-    static func hasAnyClawdisInvoker() -> Bool {
-        if self.clawdisExecutable() != nil { return true }
-        if self.findExecutable(named: "pnpm") != nil { return true }
-        if self.findExecutable(named: "node") != nil, self.nodeCliPath() != nil { return true }
+    static func hasAnyClawdisInvoker(searchPaths: [String]? = nil) -> Bool {
+        if self.clawdisExecutable(searchPaths: searchPaths) != nil { return true }
+        if self.findExecutable(named: "pnpm", searchPaths: searchPaths) != nil { return true }
+        if self.findExecutable(named: "node", searchPaths: searchPaths) != nil, self.nodeCliPath() != nil { return true }
         return false
     }
 
     static func clawdisNodeCommand(
         subcommand: String,
         extraArgs: [String] = [],
-        defaults: UserDefaults = .standard) -> [String]
+        defaults: UserDefaults = .standard,
+        searchPaths: [String]? = nil) -> [String]
     {
         let settings = self.connectionSettings(defaults: defaults)
         if settings.mode == .remote, let ssh = self.sshNodeCommand(
@@ -192,24 +203,28 @@ enum CommandResolver {
             return ssh
         }
 
-        let runtimeResult = self.runtimeResolution()
+        let runtimeResult = self.runtimeResolution(searchPaths: searchPaths)
 
         switch runtimeResult {
         case let .success(runtime):
-            if let clawdisPath = self.clawdisExecutable() {
+            let root = self.projectRoot()
+            if let clawdisPath = self.projectClawdisExecutable(projectRoot: root) {
                 return [clawdisPath, subcommand] + extraArgs
             }
 
-            if let entry = self.gatewayEntrypoint(in: self.projectRoot()) {
+            if let entry = self.gatewayEntrypoint(in: root) {
                 return self.makeRuntimeCommand(
                     runtime: runtime,
                     entrypoint: entry,
                     subcommand: subcommand,
                     extraArgs: extraArgs)
             }
-            if let pnpm = self.findExecutable(named: "pnpm") {
+            if let pnpm = self.findExecutable(named: "pnpm", searchPaths: searchPaths) {
                 // Use --silent to avoid pnpm lifecycle banners that would corrupt JSON outputs.
                 return [pnpm, "--silent", "clawdis", subcommand] + extraArgs
+            }
+            if let clawdisPath = self.clawdisExecutable(searchPaths: searchPaths) {
+                return [clawdisPath, subcommand] + extraArgs
             }
 
             let missingEntry = """
@@ -226,9 +241,10 @@ enum CommandResolver {
     static func clawdisCommand(
         subcommand: String,
         extraArgs: [String] = [],
-        defaults: UserDefaults = .standard) -> [String]
+        defaults: UserDefaults = .standard,
+        searchPaths: [String]? = nil) -> [String]
     {
-        self.clawdisNodeCommand(subcommand: subcommand, extraArgs: extraArgs, defaults: defaults)
+        self.clawdisNodeCommand(subcommand: subcommand, extraArgs: extraArgs, defaults: defaults, searchPaths: searchPaths)
     }
 
     // MARK: - SSH helpers

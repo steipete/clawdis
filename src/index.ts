@@ -17,6 +17,7 @@ import {
   saveSessionStore,
 } from "./config/sessions.js";
 import { ensureBinary } from "./infra/binaries.js";
+import { normalizeEnv } from "./infra/env.js";
 import { isMainModule } from "./infra/is-main.js";
 import { ensureClawdisCliOnPath } from "./infra/path-env.js";
 import {
@@ -32,6 +33,7 @@ import { monitorWebProvider } from "./provider-web.js";
 import { assertProvider, normalizeE164, toWhatsappJid } from "./utils.js";
 
 dotenv.config({ quiet: true });
+normalizeEnv();
 ensureClawdisCliOnPath();
 
 // Capture all console output into structured logs while keeping stdout/stderr behavior.

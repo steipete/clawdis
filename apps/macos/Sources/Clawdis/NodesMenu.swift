@@ -2,51 +2,53 @@ import AppKit
 import SwiftUI
 
 struct NodeMenuEntryFormatter {
-    static func isGateway(_ entry: InstanceInfo) -> Bool {
-        entry.mode?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "gateway"
+    static func isConnected(_ entry: NodeInfo) -> Bool {
+        entry.isConnected
     }
 
-    static func isLocal(_ entry: InstanceInfo) -> Bool {
-        entry.mode?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "local"
+    static func primaryName(_ entry: NodeInfo) -> String {
+        entry.displayName?.nonEmpty ?? entry.nodeId
     }
 
-    static func primaryName(_ entry: InstanceInfo) -> String {
-        if self.isGateway(entry) {
-            let host = entry.host?.nonEmpty
-            if let host, host.lowercased() != "gateway" { return host }
-            return "Gateway"
+    static func summaryText(_ entry: NodeInfo) -> String {
+        let name = self.primaryName(entry)
+        var prefix = "Node: \(name)"
+        if let ip = entry.remoteIp?.nonEmpty {
+            prefix += " (\(ip))"
         }
-        return entry.host?.nonEmpty ?? entry.id
-    }
-
-    static func summaryText(_ entry: InstanceInfo) -> String {
-        entry.text.nonEmpty ?? self.primaryName(entry)
-    }
-
-    static func roleText(_ entry: InstanceInfo) -> String {
-        if self.isGateway(entry) { return "gateway" }
-        if let mode = entry.mode?.nonEmpty { return mode }
-        return "node"
-    }
-
-    static func detailLeft(_ entry: InstanceInfo) -> String {
-        let role = self.roleText(entry)
-        if let ip = entry.ip?.nonEmpty { return "\(ip) · \(role)" }
-        return role
-    }
-
-    static func detailRight(_ entry: InstanceInfo) -> String? {
-        var parts: [String] = []
-        if let platform = self.platformText(entry) { parts.append(platform) }
+        var parts = [prefix]
+        if let platform = self.platformText(entry) {
+            parts.append("platform \(platform)")
+        }
         if let version = entry.version?.nonEmpty {
-            let short = self.compactVersion(version)
-            parts.append("v\(short)")
+            parts.append("app \(self.compactVersion(version))")
         }
-        if parts.isEmpty { return nil }
+        parts.append("status \(self.roleText(entry))")
         return parts.joined(separator: " · ")
     }
 
-    static func platformText(_ entry: InstanceInfo) -> String? {
+    static func roleText(_ entry: NodeInfo) -> String {
+        if entry.isConnected { return "connected" }
+        if entry.isPaired { return "paired" }
+        return "unpaired"
+    }
+
+    static func detailLeft(_ entry: NodeInfo) -> String {
+        let role = self.roleText(entry)
+        if let ip = entry.remoteIp?.nonEmpty { return "\(ip) · \(role)" }
+        return role
+    }
+
+    static func headlineRight(_ entry: NodeInfo) -> String? {
+        self.platformText(entry)
+    }
+
+    static func detailRightVersion(_ entry: NodeInfo) -> String? {
+        guard let version = entry.version?.nonEmpty else { return nil }
+        return self.shortVersionLabel(version)
+    }
+
+    static func platformText(_ entry: NodeInfo) -> String? {
         if let raw = entry.platform?.nonEmpty {
             return self.prettyPlatform(raw) ?? raw
         }
@@ -99,8 +101,17 @@ struct NodeMenuEntryFormatter {
         return trimmed
     }
 
-    static func leadingSymbol(_ entry: InstanceInfo) -> String {
-        if self.isGateway(entry) { return self.safeSystemSymbol("dot.radiowaves.left.and.right", fallback: "network") }
+    private static func shortVersionLabel(_ raw: String) -> String {
+        let compact = self.compactVersion(raw)
+        if compact.isEmpty { return compact }
+        if compact.lowercased().hasPrefix("v") { return compact }
+        if let first = compact.unicodeScalars.first, CharacterSet.decimalDigits.contains(first) {
+            return "v\(compact)"
+        }
+        return compact
+    }
+
+    static func leadingSymbol(_ entry: NodeInfo) -> String {
         if let family = entry.deviceFamily?.lowercased() {
             if family.contains("mac") {
                 return self.safeSystemSymbol("laptopcomputer", fallback: "laptopcomputer")
@@ -116,9 +127,11 @@ struct NodeMenuEntryFormatter {
         return "cpu"
     }
 
-    static func isAndroid(_ entry: InstanceInfo) -> Bool {
+    static func isAndroid(_ entry: NodeInfo) -> Bool {
         let family = entry.deviceFamily?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return family == "android"
+        if family == "android" { return true }
+        let platform = entry.platform?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return platform?.contains("android") == true
     }
 
     private static func safeSystemSymbol(_ preferred: String, fallback: String) -> String {
@@ -128,7 +141,7 @@ struct NodeMenuEntryFormatter {
 }
 
 struct NodeMenuRowView: View {
-    let entry: InstanceInfo
+    let entry: NodeInfo
     let width: CGFloat
     @Environment(\.menuItemHighlighted) private var isHighlighted
 
@@ -146,11 +159,32 @@ struct NodeMenuRowView: View {
                 .frame(width: 22, height: 22, alignment: .center)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(NodeMenuEntryFormatter.primaryName(self.entry))
-                    .font(.callout.weight(NodeMenuEntryFormatter.isGateway(self.entry) ? .semibold : .regular))
-                    .foregroundStyle(self.primaryColor)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(NodeMenuEntryFormatter.primaryName(self.entry))
+                        .font(.callout.weight(NodeMenuEntryFormatter.isConnected(self.entry) ? .semibold : .regular))
+                        .foregroundStyle(self.primaryColor)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(1)
+
+                    Spacer(minLength: 8)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if let right = NodeMenuEntryFormatter.headlineRight(self.entry) {
+                            Text(right)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(self.secondaryColor)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .layoutPriority(2)
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(self.secondaryColor)
+                            .padding(.leading, 2)
+                    }
+                }
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(NodeMenuEntryFormatter.detailLeft(self.entry))
@@ -161,21 +195,15 @@ struct NodeMenuRowView: View {
 
                     Spacer(minLength: 0)
 
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        if let right = NodeMenuEntryFormatter.detailRight(self.entry) {
-                            Text(right)
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(self.secondaryColor)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
+                    if let version = NodeMenuEntryFormatter.detailRightVersion(self.entry) {
+                        Text(version)
+                            .font(.caption.monospacedDigit())
                             .foregroundStyle(self.secondaryColor)
-                            .padding(.leading, 2)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -213,5 +241,38 @@ struct AndroidMark: View {
                 .frame(width: headWidth, height: headHeight)
                 .position(x: headX + headWidth * 0.5, y: headY + headHeight * 0.5)
         }
+    }
+}
+
+struct NodeMenuMultilineView: View {
+    let label: String
+    let value: String
+    let width: CGFloat
+    @Environment(\.menuItemHighlighted) private var isHighlighted
+
+    private var primaryColor: Color {
+        self.isHighlighted ? Color(nsColor: .selectedMenuItemTextColor) : .primary
+    }
+
+    private var secondaryColor: Color {
+        self.isHighlighted ? Color(nsColor: .selectedMenuItemTextColor).opacity(0.85) : .secondary
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(self.label):")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(self.secondaryColor)
+
+            Text(self.value)
+                .font(.caption)
+                .foregroundStyle(self.primaryColor)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 6)
+        .padding(.leading, 18)
+        .padding(.trailing, 12)
+        .frame(width: max(1, self.width), alignment: .leading)
     }
 }

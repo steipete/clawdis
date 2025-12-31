@@ -195,6 +195,28 @@ Controls inbound/outbound prefixes and timestamps.
 }
 ```
 
+### `talk`
+
+Defaults for Talk mode (macOS/iOS/Android). Voice IDs fall back to `ELEVENLABS_VOICE_ID` or `SAG_VOICE_ID` when unset.
+`apiKey` falls back to `ELEVENLABS_API_KEY` (or the gateway’s shell profile) when unset.
+`voiceAliases` lets Talk directives use friendly names (e.g. `"voice":"Clawd"`).
+
+```json5
+{
+  talk: {
+    voiceId: "elevenlabs_voice_id",
+    voiceAliases: {
+      Clawd: "EXAVITQu4vr4xnSDxMaL",
+      Roger: "CwhRBWXzGAHq8TQ4Fs17"
+    },
+    modelId: "eleven_v3",
+    outputFormat: "mp3_44100_128",
+    apiKey: "elevenlabs_api_key",
+    interruptOnSpeech: true
+  }
+}
+```
+
 ### `agent`
 
 Controls the embedded agent runtime (model/thinking/verbose/timeouts).
@@ -237,6 +259,8 @@ Controls the embedded agent runtime (model/thinking/verbose/timeouts).
 If `modelAliases` is configured, you may also use the alias key (e.g. `Opus`).
 If you omit the provider, CLAWDIS currently assumes `anthropic` as a temporary
 deprecation fallback.
+Z.AI models are available as `zai/<model>` (e.g. `zai/glm-4.7`) and require
+`ZAI_API_KEY` (or legacy `Z_AI_API_KEY`) in the environment.
 
 `agent.heartbeat` configures periodic heartbeat runs:
 - `every`: duration string (`ms`, `s`, `m`, `h`); default unit minutes. Omit or set
@@ -441,6 +465,20 @@ Defaults:
     // Advanced:
     // headless: false,
     // attachOnly: false,
+  }
+}
+```
+
+### `ui` (Appearance)
+
+Optional accent color used by the native apps for UI chrome (e.g. Talk Mode bubble tint).
+
+If unset, clients fall back to a muted light-blue.
+
+```json5
+{
+  ui: {
+    seamColor: "#FF4500" // hex (RRGGBB or #RRGGBB)
   }
 }
 ```

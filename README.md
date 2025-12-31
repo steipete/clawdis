@@ -19,6 +19,8 @@ It answers you on the surfaces you already use (WhatsApp, Telegram, Discord, Web
 
 If you want a private, single-user assistant that feels local, fast, and always-on, this is it.
 
+Using Claude Pro/Max subscription? See `docs/onboarding.md` for the Anthropic OAuth setup.
+
 ```
 Your surfaces
    │

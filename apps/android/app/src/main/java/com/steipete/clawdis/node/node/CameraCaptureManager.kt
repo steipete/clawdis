@@ -28,6 +28,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.Executor
+import kotlin.math.roundToInt
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -99,14 +100,36 @@ class CameraCaptureManager(private val context: Context) {
           decoded
         }
 
-      val out = ByteArrayOutputStream()
-      val jpegQuality = (quality * 100.0).toInt().coerceIn(10, 100)
-      if (!scaled.compress(Bitmap.CompressFormat.JPEG, jpegQuality, out)) {
-        throw IllegalStateException("UNAVAILABLE: failed to encode JPEG")
-      }
-      val base64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+      val maxPayloadBytes = 5 * 1024 * 1024
+      // Base64 inflates payloads by ~4/3; cap encoded bytes so the payload stays under 5MB (API limit).
+      val maxEncodedBytes = (maxPayloadBytes / 4) * 3
+      val result =
+        JpegSizeLimiter.compressToLimit(
+          initialWidth = scaled.width,
+          initialHeight = scaled.height,
+          startQuality = (quality * 100.0).roundToInt().coerceIn(10, 100),
+          maxBytes = maxEncodedBytes,
+          encode = { width, height, q ->
+            val bitmap =
+              if (width == scaled.width && height == scaled.height) {
+                scaled
+              } else {
+                scaled.scale(width, height)
+              }
+            val out = ByteArrayOutputStream()
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, q, out)) {
+              if (bitmap !== scaled) bitmap.recycle()
+              throw IllegalStateException("UNAVAILABLE: failed to encode JPEG")
+            }
+            if (bitmap !== scaled) {
+              bitmap.recycle()
+            }
+            out.toByteArray()
+          },
+        )
+      val base64 = Base64.encodeToString(result.bytes, Base64.NO_WRAP)
       Payload(
-        """{"format":"jpg","base64":"$base64","width":${scaled.width},"height":${scaled.height}}""",
+        """{"format":"jpg","base64":"$base64","width":${result.width},"height":${result.height}}""",
       )
     }
 

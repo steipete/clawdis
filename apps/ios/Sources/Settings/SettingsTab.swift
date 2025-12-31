@@ -20,6 +20,8 @@ struct SettingsTab: View {
     @AppStorage("node.displayName") private var displayName: String = "iOS Node"
     @AppStorage("node.instanceId") private var instanceId: String = UUID().uuidString
     @AppStorage("voiceWake.enabled") private var voiceWakeEnabled: Bool = false
+    @AppStorage("talk.enabled") private var talkEnabled: Bool = false
+    @AppStorage("talk.button.enabled") private var talkButtonEnabled: Bool = true
     @AppStorage("camera.enabled") private var cameraEnabled: Bool = true
     @AppStorage("screen.preventSleep") private var preventSleep: Bool = true
     @AppStorage("bridge.preferredStableID") private var preferredBridgeStableID: String = ""
@@ -51,6 +53,9 @@ struct SettingsTab: View {
                                 }
                             }
                         }
+                    LabeledContent("Platform", value: self.platformString())
+                    LabeledContent("Version", value: self.appVersion())
+                    LabeledContent("Model", value: self.modelIdentifier())
                 }
 
                 Section("Bridge") {
@@ -153,6 +158,12 @@ struct SettingsTab: View {
                         .onChange(of: self.voiceWakeEnabled) { _, newValue in
                             self.appModel.setVoiceWakeEnabled(newValue)
                         }
+                    Toggle("Talk Mode", isOn: self.$talkEnabled)
+                        .onChange(of: self.talkEnabled) { _, newValue in
+                            self.appModel.setTalkEnabled(newValue)
+                        }
+                    // Keep this separate so users can hide the side bubble without disabling Talk Mode.
+                    Toggle("Show Talk Button", isOn: self.$talkButtonEnabled)
 
                     NavigationLink {
                         VoiceWakeWordsSettingsView()
@@ -227,6 +238,12 @@ struct SettingsTab: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(bridge.name)
+                            let detailLines = self.bridgeDetailLines(bridge)
+                            ForEach(detailLines, id: \.self) { line in
+                                Text(line)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         Spacer()
 
@@ -503,5 +520,27 @@ struct SettingsTab: View {
 
     private static func httpURLString(host: String?, port: Int?, fallback: String) -> String {
         SettingsNetworkingHelpers.httpURLString(host: host, port: port, fallback: fallback)
+    }
+
+    private func bridgeDetailLines(_ bridge: BridgeDiscoveryModel.DiscoveredBridge) -> [String] {
+        var lines: [String] = []
+        if let lanHost = bridge.lanHost { lines.append("LAN: \(lanHost)") }
+        if let tailnet = bridge.tailnetDns { lines.append("Tailnet: \(tailnet)") }
+
+        let gatewayPort = bridge.gatewayPort
+        let bridgePort = bridge.bridgePort
+        let canvasPort = bridge.canvasPort
+        if gatewayPort != nil || bridgePort != nil || canvasPort != nil {
+            let gw = gatewayPort.map(String.init) ?? "—"
+            let br = bridgePort.map(String.init) ?? "—"
+            let canvas = canvasPort.map(String.init) ?? "—"
+            lines.append("Ports: gw \(gw) · bridge \(br) · canvas \(canvas)")
+        }
+
+        if lines.isEmpty {
+            lines.append(bridge.debugID)
+        }
+
+        return lines
     }
 }

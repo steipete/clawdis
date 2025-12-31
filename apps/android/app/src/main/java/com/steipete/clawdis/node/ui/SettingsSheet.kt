@@ -2,6 +2,7 @@ package com.steipete.clawdis.node.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -46,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.steipete.clawdis.node.BuildConfig
 import com.steipete.clawdis.node.MainViewModel
 import com.steipete.clawdis.node.NodeForegroundService
 import com.steipete.clawdis.node.VoiceWakeMode
@@ -74,6 +76,22 @@ fun SettingsSheet(viewModel: MainViewModel) {
   val listState = rememberLazyListState()
   val (wakeWordsText, setWakeWordsText) = remember { mutableStateOf("") }
   val (advancedExpanded, setAdvancedExpanded) = remember { mutableStateOf(false) }
+  val deviceModel =
+    remember {
+      listOfNotNull(Build.MANUFACTURER, Build.MODEL)
+        .joinToString(" ")
+        .trim()
+        .ifEmpty { "Android" }
+    }
+  val appVersion =
+    remember {
+      val versionName = BuildConfig.VERSION_NAME.trim().ifEmpty { "dev" }
+      if (BuildConfig.DEBUG && !versionName.contains("dev", ignoreCase = true)) {
+        "$versionName-dev"
+      } else {
+        versionName
+      }
+    }
 
   LaunchedEffect(wakeWords) { setWakeWordsText(wakeWords.joinToString(", ")) }
 
@@ -142,6 +160,8 @@ fun SettingsSheet(viewModel: MainViewModel) {
       )
     }
     item { Text("Instance ID: $instanceId", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    item { Text("Device: $deviceModel", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    item { Text("Version: $appVersion", color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
     item { HorizontalDivider() }
 
@@ -181,9 +201,27 @@ fun SettingsSheet(viewModel: MainViewModel) {
         item { Text("No bridges found yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
       } else {
         items(items = visibleBridges, key = { it.stableId }) { bridge ->
+          val detailLines =
+            buildList {
+              add("IP: ${bridge.host}:${bridge.port}")
+              bridge.lanHost?.let { add("LAN: $it") }
+              bridge.tailnetDns?.let { add("Tailnet: $it") }
+              if (bridge.gatewayPort != null || bridge.bridgePort != null || bridge.canvasPort != null) {
+                val gw = bridge.gatewayPort?.toString() ?: "—"
+                val br = (bridge.bridgePort ?: bridge.port).toString()
+                val canvas = bridge.canvasPort?.toString() ?: "—"
+                add("Ports: gw $gw · bridge $br · canvas $canvas")
+              }
+            }
           ListItem(
             headlineContent = { Text(bridge.name) },
-            supportingContent = { Text("${bridge.host}:${bridge.port}") },
+            supportingContent = {
+              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                detailLines.forEach { line ->
+                  Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+              }
+            },
             trailingContent = {
               Button(
                 onClick = {

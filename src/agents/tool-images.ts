@@ -1,19 +1,19 @@
 import type { AgentToolResult } from "@mariozechner/pi-ai";
 
 import { getImageMetadata, resizeToJpeg } from "../media/image-ops.js";
-import { detectMime } from "../media/mime.js";
 
 type ToolContentBlock = AgentToolResult<unknown>["content"][number];
 type ImageContentBlock = Extract<ToolContentBlock, { type: "image" }>;
 type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
 
-// Anthropic Messages API limitation (observed in Clawdis sessions):
-// When sending many images in a single request (e.g. via session history + tool results),
-// Anthropic rejects any image where *either* dimension exceeds 2000px.
+// Anthropic Messages API limitations (observed in Clawdis sessions):
+// - Images over ~2000px per side can fail in multi-image requests.
+// - Images over 5MB are rejected by the API.
 //
 // To keep sessions resilient (and avoid "silent" WhatsApp non-replies), we auto-downscale
-// all base64 image blocks above this limit while preserving aspect ratio.
+// and recompress base64 image blocks when they exceed these limits.
 const MAX_IMAGE_DIMENSION_PX = 2000;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function isImageBlock(block: unknown): block is ImageContentBlock {
   if (!block || typeof block !== "object") return false;
@@ -35,66 +35,80 @@ async function resizeImageBase64IfNeeded(params: {
   base64: string;
   mimeType: string;
   maxDimensionPx: number;
+  maxBytes: number;
 }): Promise<{ base64: string; mimeType: string; resized: boolean }> {
   const buf = Buffer.from(params.base64, "base64");
   const meta = await getImageMetadata(buf);
   const width = meta?.width;
   const height = meta?.height;
-  if (
-    typeof width !== "number" ||
-    typeof height !== "number" ||
-    (width <= params.maxDimensionPx && height <= params.maxDimensionPx)
+  const overBytes = buf.byteLength > params.maxBytes;
+  const maxDim = Math.max(width ?? 0, height ?? 0);
+  if (typeof width !== "number" || typeof height !== "number") {
+    if (!overBytes) {
+      return {
+        base64: params.base64,
+        mimeType: params.mimeType,
+        resized: false,
+      };
+    }
+  } else if (
+    !overBytes &&
+    width <= params.maxDimensionPx &&
+    height <= params.maxDimensionPx
   ) {
     return { base64: params.base64, mimeType: params.mimeType, resized: false };
   }
 
-  const mime = params.mimeType.toLowerCase();
-  let out: Buffer;
-  try {
-    const mod = (await import("sharp")) as unknown as {
-      default?: typeof import("sharp");
-    };
-    const sharp = mod.default ?? (mod as unknown as typeof import("sharp"));
-    const img = sharp(buf, { failOnError: false }).resize({
-      width: params.maxDimensionPx,
-      height: params.maxDimensionPx,
-      fit: "inside",
-      withoutEnlargement: true,
-    });
-    if (mime === "image/jpeg" || mime === "image/jpg") {
-      out = await img.jpeg({ quality: 85 }).toBuffer();
-    } else if (mime === "image/webp") {
-      out = await img.webp({ quality: 85 }).toBuffer();
-    } else if (mime === "image/png") {
-      out = await img.png().toBuffer();
-    } else {
-      out = await img.png().toBuffer();
+  const qualities = [85, 75, 65, 55, 45, 35];
+  const sideStart =
+    maxDim > 0
+      ? Math.min(params.maxDimensionPx, maxDim)
+      : params.maxDimensionPx;
+  const sideGrid = [sideStart, 1800, 1600, 1400, 1200, 1000, 800]
+    .map((v) => Math.min(params.maxDimensionPx, v))
+    .filter((v, i, arr) => v > 0 && arr.indexOf(v) === i)
+    .sort((a, b) => b - a);
+
+  let smallest: { buffer: Buffer; size: number } | null = null;
+  for (const side of sideGrid) {
+    for (const quality of qualities) {
+      const out = await resizeToJpeg({
+        buffer: buf,
+        maxSide: side,
+        quality,
+        withoutEnlargement: true,
+      });
+      if (!smallest || out.byteLength < smallest.size) {
+        smallest = { buffer: out, size: out.byteLength };
+      }
+      if (out.byteLength <= params.maxBytes) {
+        return {
+          base64: out.toString("base64"),
+          mimeType: "image/jpeg",
+          resized: true,
+        };
+      }
     }
-  } catch {
-    // Bun can't load sharp native addons. Fall back to a JPEG conversion.
-    out = await resizeToJpeg({
-      buffer: buf,
-      maxSide: params.maxDimensionPx,
-      quality: 85,
-      withoutEnlargement: true,
-    });
   }
 
-  const sniffed = await detectMime({ buffer: out.slice(0, 256) });
-  const nextMime = sniffed?.startsWith("image/") ? sniffed : params.mimeType;
-
-  return { base64: out.toString("base64"), mimeType: nextMime, resized: true };
+  const best = smallest?.buffer ?? buf;
+  const maxMb = (params.maxBytes / (1024 * 1024)).toFixed(0);
+  const gotMb = (best.byteLength / (1024 * 1024)).toFixed(2);
+  throw new Error(
+    `Image could not be reduced below ${maxMb}MB (got ${gotMb}MB)`,
+  );
 }
 
 export async function sanitizeContentBlocksImages(
   blocks: ToolContentBlock[],
   label: string,
-  opts: { maxDimensionPx?: number } = {},
+  opts: { maxDimensionPx?: number; maxBytes?: number } = {},
 ): Promise<ToolContentBlock[]> {
   const maxDimensionPx = Math.max(
     opts.maxDimensionPx ?? MAX_IMAGE_DIMENSION_PX,
     1,
   );
+  const maxBytes = Math.max(opts.maxBytes ?? MAX_IMAGE_BYTES, 1);
   const out: ToolContentBlock[] = [];
 
   for (const block of blocks) {
@@ -117,6 +131,7 @@ export async function sanitizeContentBlocksImages(
         base64: data,
         mimeType: block.mimeType,
         maxDimensionPx,
+        maxBytes,
       });
       out.push({ ...block, data: resized.base64, mimeType: resized.mimeType });
     } catch (err) {
@@ -133,7 +148,7 @@ export async function sanitizeContentBlocksImages(
 export async function sanitizeToolResultImages(
   result: AgentToolResult<unknown>,
   label: string,
-  opts: { maxDimensionPx?: number } = {},
+  opts: { maxDimensionPx?: number; maxBytes?: number } = {},
 ): Promise<AgentToolResult<unknown>> {
   const content = Array.isArray(result.content) ? result.content : [];
   if (!content.some((b) => isImageBlock(b) || isTextBlock(b))) return result;

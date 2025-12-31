@@ -62,7 +62,11 @@ targets:
           swiftlint lint --config "$SRCROOT/.swiftlint.yml" --use-script-input-file-lists
     settings:
       base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: Y5PE65HELJ
         PRODUCT_BUNDLE_IDENTIFIER: com.steipete.clawdis.ios
+        PROVISIONING_PROFILE_SPECIFIER: "com.steipete.clawdis.ios Development"
         SWIFT_VERSION: "6.0"
     info:
       path: Sources/Info.plist

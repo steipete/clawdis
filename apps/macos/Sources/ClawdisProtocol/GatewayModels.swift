@@ -689,6 +689,23 @@ public struct ConfigSetParams: Codable {
     }
 }
 
+public struct TalkModeParams: Codable {
+    public let enabled: Bool
+    public let phase: String?
+
+    public init(
+        enabled: Bool,
+        phase: String?
+    ) {
+        self.enabled = enabled
+        self.phase = phase
+    }
+    private enum CodingKeys: String, CodingKey {
+        case enabled
+        case phase
+    }
+}
+
 public struct ProvidersStatusParams: Codable {
     public let probe: Bool?
     public let timeoutms: Int?

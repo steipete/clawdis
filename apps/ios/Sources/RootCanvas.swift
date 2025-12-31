@@ -51,7 +51,10 @@ struct RootCanvas: View {
             case .settings:
                 SettingsTab()
             case .chat:
-                ChatSheet(bridge: self.appModel.bridgeSession)
+                ChatSheet(
+                    bridge: self.appModel.bridgeSession,
+                    sessionKey: self.appModel.mainSessionKey,
+                    userAccent: self.appModel.seamColor)
             }
         }
         .onAppear { self.updateIdleTimer() }
@@ -119,6 +122,9 @@ struct RootCanvas: View {
 }
 
 private struct CanvasContent: View {
+    @Environment(NodeAppModel.self) private var appModel
+    @AppStorage("talk.enabled") private var talkEnabled: Bool = false
+    @AppStorage("talk.button.enabled") private var talkButtonEnabled: Bool = true
     var systemColorScheme: ColorScheme
     var bridgeStatus: StatusPill.BridgeState
     var voiceWakeEnabled: Bool
@@ -140,6 +146,21 @@ private struct CanvasContent: View {
                 }
                 .accessibilityLabel("Chat")
 
+                if self.talkButtonEnabled {
+                    // Talk mode lives on a side bubble so it doesn't get buried in settings.
+                    OverlayButton(
+                        systemImage: self.appModel.talkMode.isEnabled ? "waveform.circle.fill" : "waveform.circle",
+                        brighten: self.brightenButtons,
+                        tint: self.appModel.seamColor,
+                        isActive: self.appModel.talkMode.isEnabled)
+                    {
+                        let next = !self.appModel.talkMode.isEnabled
+                        self.talkEnabled = next
+                        self.appModel.setTalkEnabled(next)
+                    }
+                    .accessibilityLabel("Talk Mode")
+                }
+
                 OverlayButton(systemImage: "gearshape.fill", brighten: self.brightenButtons) {
                     self.openSettings()
                 }
@@ -148,10 +169,17 @@ private struct CanvasContent: View {
             .padding(.top, 10)
             .padding(.trailing, 10)
         }
+        .overlay(alignment: .center) {
+            if self.appModel.talkMode.isEnabled {
+                TalkOrbOverlay()
+                    .transition(.opacity)
+            }
+        }
         .overlay(alignment: .topLeading) {
             StatusPill(
                 bridge: self.bridgeStatus,
                 voiceWakeEnabled: self.voiceWakeEnabled,
+                activity: self.statusActivity,
                 brighten: self.brightenButtons,
                 onTap: {
                     self.openSettings()
@@ -169,45 +197,78 @@ private struct CanvasContent: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .overlay(alignment: .topLeading) {
-            if let cameraHUDText, !cameraHUDText.isEmpty, let cameraHUDKind {
-                CameraCaptureToast(
-                    text: cameraHUDText,
-                    kind: self.mapCameraKind(cameraHUDKind),
-                    brighten: self.brightenButtons)
-                    .padding(SwiftUI.Edge.Set.leading, 10)
-                    .safeAreaPadding(SwiftUI.Edge.Set.top, 106)
-                    .transition(
-                        AnyTransition.move(edge: SwiftUI.Edge.top)
-                            .combined(with: AnyTransition.opacity))
-            }
-        }
     }
 
-    private func mapCameraKind(_ kind: NodeAppModel.CameraHUDKind) -> CameraCaptureToast.Kind {
-        switch kind {
-        case .photo:
-            .photo
-        case .recording:
-            .recording
-        case .success:
-            .success
-        case .error:
-            .error
+    private var statusActivity: StatusPill.Activity? {
+        // Status pill owns transient activity state so it doesn't overlap the connection indicator.
+        if self.appModel.isBackgrounded {
+            return StatusPill.Activity(
+                title: "Foreground required",
+                systemImage: "exclamationmark.triangle.fill",
+                tint: .orange)
         }
+
+        let bridgeStatus = self.appModel.bridgeStatusText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bridgeLower = bridgeStatus.lowercased()
+        if bridgeLower.contains("repair") {
+            return StatusPill.Activity(title: "Repairing…", systemImage: "wrench.and.screwdriver", tint: .orange)
+        }
+        if bridgeLower.contains("approval") || bridgeLower.contains("pairing") {
+            return StatusPill.Activity(title: "Approval pending", systemImage: "person.crop.circle.badge.clock")
+        }
+        // Avoid duplicating the primary bridge status ("Connecting…") in the activity slot.
+
+        if self.appModel.screenRecordActive {
+            return StatusPill.Activity(title: "Recording screen…", systemImage: "record.circle.fill", tint: .red)
+        }
+
+        if let cameraHUDText, !cameraHUDText.isEmpty, let cameraHUDKind {
+            let systemImage: String
+            let tint: Color?
+            switch cameraHUDKind {
+            case .photo:
+                systemImage = "camera.fill"
+                tint = nil
+            case .recording:
+                systemImage = "video.fill"
+                tint = .red
+            case .success:
+                systemImage = "checkmark.circle.fill"
+                tint = .green
+            case .error:
+                systemImage = "exclamationmark.triangle.fill"
+                tint = .red
+            }
+            return StatusPill.Activity(title: cameraHUDText, systemImage: systemImage, tint: tint)
+        }
+
+        if self.voiceWakeEnabled {
+            let voiceStatus = self.appModel.voiceWake.statusText
+            if voiceStatus.localizedCaseInsensitiveContains("microphone permission") {
+                return StatusPill.Activity(title: "Mic permission", systemImage: "mic.slash", tint: .orange)
+            }
+            if voiceStatus == "Paused" {
+                let suffix = self.appModel.isBackgrounded ? " (background)" : ""
+                return StatusPill.Activity(title: "Voice Wake paused\(suffix)", systemImage: "pause.circle.fill")
+            }
+        }
+
+        return nil
     }
 }
 
 private struct OverlayButton: View {
     let systemImage: String
     let brighten: Bool
+    var tint: Color?
+    var isActive: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: self.action) {
             Image(systemName: self.systemImage)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(self.isActive ? (self.tint ?? .primary) : .primary)
                 .padding(10)
                 .background {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -226,8 +287,25 @@ private struct OverlayButton: View {
                                 .blendMode(.overlay)
                         }
                         .overlay {
+                            if let tint {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                tint.opacity(self.isActive ? 0.22 : 0.14),
+                                                tint.opacity(self.isActive ? 0.10 : 0.06),
+                                                .clear,
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing))
+                                    .blendMode(.overlay)
+                            }
+                        }
+                        .overlay {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(.white.opacity(self.brighten ? 0.24 : 0.18), lineWidth: 0.5)
+                                .strokeBorder(
+                                    (self.tint ?? .white).opacity(self.isActive ? 0.34 : (self.brighten ? 0.24 : 0.18)),
+                                    lineWidth: self.isActive ? 0.7 : 0.5)
                         }
                         .shadow(color: .black.opacity(0.35), radius: 12, y: 6)
                 }
@@ -259,61 +337,5 @@ private struct CameraFlashOverlay: View {
                     }
                 }
             }
-    }
-}
-
-private struct CameraCaptureToast: View {
-    enum Kind {
-        case photo
-        case recording
-        case success
-        case error
-    }
-
-    var text: String
-    var kind: Kind
-    var brighten: Bool = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            self.icon
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.primary)
-
-            Text(self.text)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(.white.opacity(self.brighten ? 0.24 : 0.18), lineWidth: 0.5)
-                }
-                .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
-        }
-        .accessibilityLabel("Camera")
-        .accessibilityValue(self.text)
-    }
-
-    @ViewBuilder
-    private var icon: some View {
-        switch self.kind {
-        case .photo:
-            Image(systemName: "camera.fill")
-        case .recording:
-            Image(systemName: "record.circle.fill")
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.red, .primary)
-        case .success:
-            Image(systemName: "checkmark.circle.fill")
-        case .error:
-            Image(systemName: "exclamationmark.triangle.fill")
-        }
     }
 }

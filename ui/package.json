@@ -5,13 +5,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "lit": "^3.3.1"
+    "lit": "^3.3.2"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "4.0.16",
+    "playwright": "^1.57.0",
     "typescript": "^5.9.3",
-    "vite": "8.0.0-beta.3"
+    "vite": "8.0.0-beta.3",
+    "vitest": "4.0.16"
   }
 }

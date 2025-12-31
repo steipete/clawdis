@@ -95,6 +95,8 @@ import {
   SnapshotSchema,
   type StateVersion,
   StateVersionSchema,
+  type TalkModeParams,
+  TalkModeParamsSchema,
   type TickEvent,
   TickEventSchema,
   type WakeParams,
@@ -169,6 +171,8 @@ export const validateConfigGetParams = ajv.compile<ConfigGetParams>(
 export const validateConfigSetParams = ajv.compile<ConfigSetParams>(
   ConfigSetParamsSchema,
 );
+export const validateTalkModeParams =
+  ajv.compile<TalkModeParams>(TalkModeParamsSchema);
 export const validateProvidersStatusParams = ajv.compile<ProvidersStatusParams>(
   ProvidersStatusParamsSchema,
 );
@@ -297,6 +301,7 @@ export type {
   NodePairApproveParams,
   ConfigGetParams,
   ConfigSetParams,
+  TalkModeParams,
   ProvidersStatusParams,
   WebLoginStartParams,
   WebLoginWaitParams,

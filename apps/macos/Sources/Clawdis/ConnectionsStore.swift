@@ -294,6 +294,11 @@ final class ConnectionsStore {
                 : nil
             self.configRoot = snap.config?.mapValues { $0.foundationValue } ?? [:]
             self.configLoaded = true
+
+            let ui = snap.config?["ui"]?.dictionaryValue
+            let rawSeam = ui?["seamColor"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            AppStateStore.shared.seamColorHex = rawSeam.isEmpty ? nil : rawSeam
+
             let telegram = snap.config?["telegram"]?.dictionaryValue
             self.telegramToken = telegram?["botToken"]?.stringValue ?? ""
             self.telegramRequireMention = telegram?["requireMention"]?.boolValue ?? true

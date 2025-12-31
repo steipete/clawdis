@@ -25,6 +25,7 @@ export async function callGateway<T = unknown>(
   const timeoutMs = opts.timeoutMs ?? 10_000;
   return await new Promise<T>((resolve, reject) => {
     let settled = false;
+    let ignoreClose = false;
     const stop = (err?: Error, value?: T) => {
       if (settled) return;
       settled = true;
@@ -49,19 +50,23 @@ export async function callGateway<T = unknown>(
           const result = await client.request<T>(opts.method, opts.params, {
             expectFinal: opts.expectFinal,
           });
-          client.stop();
+          ignoreClose = true;
           stop(undefined, result);
+          client.stop();
         } catch (err) {
+          ignoreClose = true;
           client.stop();
           stop(err as Error);
         }
       },
       onClose: (code, reason) => {
+        if (settled || ignoreClose) return;
         stop(new Error(`gateway closed (${code}): ${reason}`));
       },
     });
 
     const timer = setTimeout(() => {
+      ignoreClose = true;
       client.stop();
       stop(new Error("gateway timeout"));
     }, timeoutMs);

@@ -18,6 +18,12 @@ final class BridgeDiscoveryModel {
         var endpoint: NWEndpoint
         var stableID: String
         var debugID: String
+        var lanHost: String?
+        var tailnetDns: String?
+        var gatewayPort: Int?
+        var bridgePort: Int?
+        var canvasPort: Int?
+        var cliPath: String?
     }
 
     var bridges: [DiscoveredBridge] = []
@@ -68,7 +74,8 @@ final class BridgeDiscoveryModel {
                         switch result.endpoint {
                         case let .service(name, _, _, _):
                             let decodedName = BonjourEscapes.decode(name)
-                            let advertisedName = result.endpoint.txtRecord?.dictionary["displayName"]
+                            let txt = result.endpoint.txtRecord?.dictionary ?? [:]
+                            let advertisedName = txt["displayName"]
                             let prettyAdvertised = advertisedName
                                 .map(Self.prettifyInstanceName)
                                 .flatMap { $0.isEmpty ? nil : $0 }
@@ -77,7 +84,13 @@ final class BridgeDiscoveryModel {
                                 name: prettyName,
                                 endpoint: result.endpoint,
                                 stableID: BridgeEndpointID.stableID(result.endpoint),
-                                debugID: BridgeEndpointID.prettyDescription(result.endpoint))
+                                debugID: BridgeEndpointID.prettyDescription(result.endpoint),
+                                lanHost: Self.txtValue(txt, key: "lanHost"),
+                                tailnetDns: Self.txtValue(txt, key: "tailnetDns"),
+                                gatewayPort: Self.txtIntValue(txt, key: "gatewayPort"),
+                                bridgePort: Self.txtIntValue(txt, key: "bridgePort"),
+                                canvasPort: Self.txtIntValue(txt, key: "canvasPort"),
+                                cliPath: Self.txtValue(txt, key: "cliPath"))
                         default:
                             return nil
                         }
@@ -190,5 +203,15 @@ final class BridgeDiscoveryModel {
         let stripped = normalized.replacingOccurrences(of: " (Clawdis)", with: "")
             .replacingOccurrences(of: #"\s+\(\d+\)$"#, with: "", options: .regularExpression)
         return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func txtValue(_ dict: [String: String], key: String) -> String? {
+        let raw = dict[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return raw.isEmpty ? nil : raw
+    }
+
+    private static func txtIntValue(_ dict: [String: String], key: String) -> Int? {
+        guard let raw = self.txtValue(dict, key: key) else { return nil }
+        return Int(raw)
     }
 }

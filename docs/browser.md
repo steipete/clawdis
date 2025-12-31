@@ -193,6 +193,7 @@ Notes:
 - The arm default timeout is **2 minutes** (clamped to max 2 minutes); pass `timeoutMs` if you need shorter.
 - `snapshot` defaults to `ai`; `aria` returns an accessibility tree for debugging.
 - `click`/`type` require `ref` from `snapshot --format ai`; use `evaluate` for rare CSS selector one-offs.
+- Avoid `wait` by default; use it only in exceptional cases when there is no reliable UI state to wait on.
 
 ## Security & privacy notes
 

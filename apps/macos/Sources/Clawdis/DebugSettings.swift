@@ -1,8 +1,10 @@
 import AppKit
+import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct DebugSettings: View {
+    @Bindable var state: AppState
     private let isPreview = ProcessInfo.processInfo.isPreview
     private let labelColumnWidth: CGFloat = 140
     @AppStorage(modelCatalogPathKey) private var modelCatalogPath: String = ModelCatalogLoader.defaultPath
@@ -35,6 +37,10 @@ struct DebugSettings: View {
     @State private var canvasEvalJS: String = "document.title"
     @State private var canvasEvalResult: String?
     @State private var canvasSnapshotPath: String?
+
+    init(state: AppState = AppStateStore.shared) {
+        self.state = state
+    }
 
     var body: some View {
         ScrollView(.vertical) {
@@ -194,7 +200,9 @@ struct DebugSettings: View {
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2)))
 
                     HStack(spacing: 8) {
-                        Button("Restart Gateway") { DebugActions.restartGateway() }
+                        if self.canRestartGateway {
+                            Button("Restart Gateway") { DebugActions.restartGateway() }
+                        }
                         Button("Clear log") { GatewayProcessManager.shared.clearLog() }
                         Spacer(minLength: 0)
                     }
@@ -762,6 +770,10 @@ struct DebugSettings: View {
         CommandResolver.connectionSettings().mode == .remote
     }
 
+    private var canRestartGateway: Bool {
+        self.state.connectionMode == .local && !self.attachExistingGatewayOnly
+    }
+
     private func configURL() -> URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".clawdis")
@@ -902,7 +914,7 @@ private struct PlainSettingsGroupBoxStyle: GroupBoxStyle {
 #if DEBUG
 struct DebugSettings_Previews: PreviewProvider {
     static var previews: some View {
-        DebugSettings()
+        DebugSettings(state: .preview)
             .frame(width: SettingsTab.windowWidth, height: SettingsTab.windowHeight)
     }
 }
@@ -910,7 +922,7 @@ struct DebugSettings_Previews: PreviewProvider {
 @MainActor
 extension DebugSettings {
     static func exerciseForTesting() async {
-        let view = DebugSettings()
+        let view = DebugSettings(state: .preview)
         view.modelsCount = 3
         view.modelsLoading = false
         view.modelsError = "Failed to load models"

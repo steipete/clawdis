@@ -101,11 +101,7 @@ enum ClawdisChatTheme {
     }
 
     static var userBubble: Color {
-        #if os(macOS)
-        Color(nsColor: .systemBlue)
-        #else
-        Color(uiColor: .systemBlue)
-        #endif
+        Color(red: 127 / 255.0, green: 184 / 255.0, blue: 212 / 255.0)
     }
 
     static var assistantBubble: Color {

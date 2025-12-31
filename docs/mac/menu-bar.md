@@ -8,6 +8,7 @@ read_when:
 ## What is shown
 - We surface the current agent work state in the menu bar icon and in the first status row of the menu.
 - Health status is hidden while work is active; it returns when all sessions are idle.
+- The “Nodes” block in the menu lists **devices** only (gateway bridge nodes via `node.list`), not client/presence entries.
 
 ## State model
 - Sessions: events arrive with `runId` (session key). The “main” session is the key `main`; if absent, we fall back to the most recently updated session.

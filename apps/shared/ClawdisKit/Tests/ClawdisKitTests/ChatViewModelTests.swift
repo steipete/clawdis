@@ -191,6 +191,94 @@ private extension TestChatTransportState {
         #expect(await MainActor.run { vm.pendingToolCalls.isEmpty })
     }
 
+    @Test func clearsStreamingOnExternalFinalEvent() async throws {
+        let sessionId = "sess-main"
+        let history = ClawdisChatHistoryPayload(
+            sessionKey: "main",
+            sessionId: sessionId,
+            messages: [],
+            thinkingLevel: "off")
+        let transport = TestChatTransport(historyResponses: [history, history])
+        let vm = await MainActor.run { ClawdisChatViewModel(sessionKey: "main", transport: transport) }
+
+        await MainActor.run { vm.load() }
+        try await waitUntil("bootstrap") { await MainActor.run { vm.healthOK && vm.sessionId == sessionId } }
+
+        transport.emit(
+            .agent(
+                ClawdisAgentEventPayload(
+                    runId: sessionId,
+                    seq: 1,
+                    stream: "assistant",
+                    ts: Int(Date().timeIntervalSince1970 * 1000),
+                    data: ["text": AnyCodable("external stream")])))
+
+        transport.emit(
+            .agent(
+                ClawdisAgentEventPayload(
+                    runId: sessionId,
+                    seq: 2,
+                    stream: "tool",
+                    ts: Int(Date().timeIntervalSince1970 * 1000),
+                    data: [
+                        "phase": AnyCodable("start"),
+                        "name": AnyCodable("demo"),
+                        "toolCallId": AnyCodable("t1"),
+                        "args": AnyCodable(["x": 1]),
+                    ])))
+
+        try await waitUntil("streaming active") { await MainActor.run { vm.streamingAssistantText == "external stream" } }
+        try await waitUntil("tool call pending") { await MainActor.run { vm.pendingToolCalls.count == 1 } }
+
+        transport.emit(
+            .chat(
+                ClawdisChatEventPayload(
+                    runId: "other-run",
+                    sessionKey: "main",
+                    state: "final",
+                    message: nil,
+                    errorMessage: nil)))
+
+        try await waitUntil("streaming cleared") { await MainActor.run { vm.streamingAssistantText == nil } }
+        #expect(await MainActor.run { vm.pendingToolCalls.isEmpty })
+    }
+
+    @Test func clearsStreamingOnExternalErrorEvent() async throws {
+        let sessionId = "sess-main"
+        let history = ClawdisChatHistoryPayload(
+            sessionKey: "main",
+            sessionId: sessionId,
+            messages: [],
+            thinkingLevel: "off")
+        let transport = TestChatTransport(historyResponses: [history, history])
+        let vm = await MainActor.run { ClawdisChatViewModel(sessionKey: "main", transport: transport) }
+
+        await MainActor.run { vm.load() }
+        try await waitUntil("bootstrap") { await MainActor.run { vm.healthOK && vm.sessionId == sessionId } }
+
+        transport.emit(
+            .agent(
+                ClawdisAgentEventPayload(
+                    runId: sessionId,
+                    seq: 1,
+                    stream: "assistant",
+                    ts: Int(Date().timeIntervalSince1970 * 1000),
+                    data: ["text": AnyCodable("external stream")])))
+
+        try await waitUntil("streaming active") { await MainActor.run { vm.streamingAssistantText == "external stream" } }
+
+        transport.emit(
+            .chat(
+                ClawdisChatEventPayload(
+                    runId: "other-run",
+                    sessionKey: "main",
+                    state: "error",
+                    message: nil,
+                    errorMessage: "boom")))
+
+        try await waitUntil("streaming cleared") { await MainActor.run { vm.streamingAssistantText == nil } }
+    }
+
     @Test func abortRequestsDoNotClearPendingUntilAbortedEvent() async throws {
         let sessionId = "sess-main"
         let history = ClawdisChatHistoryPayload(

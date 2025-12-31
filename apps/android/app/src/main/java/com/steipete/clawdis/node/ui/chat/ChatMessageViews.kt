@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -60,20 +58,21 @@ fun ChatMessageBubble(message: ChatMessage) {
             .background(bubbleBackground(isUser))
             .padding(horizontal = 12.dp, vertical = 10.dp),
       ) {
-        ChatMessageBody(content = message.content)
+        val textColor = textColorOverBubble(isUser)
+        ChatMessageBody(content = message.content, textColor = textColor)
       }
     }
   }
 }
 
 @Composable
-private fun ChatMessageBody(content: List<ChatMessageContent>) {
+private fun ChatMessageBody(content: List<ChatMessageContent>, textColor: Color) {
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     for (part in content) {
       when (part.type) {
         "text" -> {
           val text = part.text ?: continue
-          ChatMarkdown(text = text)
+          ChatMarkdown(text = text, textColor = textColor)
         }
         else -> {
           val b64 = part.base64 ?: continue
@@ -131,7 +130,7 @@ fun ChatStreamingAssistantBubble(text: String) {
       color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
       Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-        ChatMarkdown(text = text)
+        ChatMarkdown(text = text, textColor = MaterialTheme.colorScheme.onSurface)
       }
     }
   }
@@ -147,6 +146,15 @@ private fun bubbleBackground(isUser: Boolean): Brush {
     Brush.linearGradient(
       colors = listOf(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.colorScheme.surfaceContainerHigh),
     )
+  }
+}
+
+@Composable
+private fun textColorOverBubble(isUser: Boolean): Color {
+  return if (isUser) {
+    MaterialTheme.colorScheme.onPrimary
+  } else {
+    MaterialTheme.colorScheme.onSurface
   }
 }
 

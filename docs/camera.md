@@ -35,6 +35,7 @@ All camera access is gated behind **user-controlled settings**.
     - `format: "jpg"`
     - `base64: "<...>"`
     - `width`, `height`
+  - Payload guard: photos are recompressed to keep the base64 payload under 5 MB.
 
 - `camera.clip`
   - Params:
@@ -90,6 +91,10 @@ If permissions are missing, the app will prompt when possible; if denied, `camer
 
 Like `canvas.*`, the Android node only allows `camera.*` commands in the **foreground**. Background invocations return `NODE_BACKGROUND_UNAVAILABLE`.
 
+### Payload guard
+
+Photos are recompressed to keep the base64 payload under 5 MB.
+
 ## macOS app
 
 ### User setting (default off)
@@ -116,6 +121,7 @@ clawdis nodes camera clip --node <id> --no-audio
 
 Notes:
 - `clawdis nodes camera snap` defaults to `maxWidth=1600` unless overridden.
+- Photo payloads are recompressed to keep base64 under 5 MB.
 
 ## Safety + practical limits
 

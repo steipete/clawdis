@@ -23,9 +23,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   val statusText: StateFlow<String> = runtime.statusText
   val serverName: StateFlow<String?> = runtime.serverName
   val remoteAddress: StateFlow<String?> = runtime.remoteAddress
+  val isForeground: StateFlow<Boolean> = runtime.isForeground
+  val seamColorArgb: StateFlow<Long> = runtime.seamColorArgb
 
   val cameraHud: StateFlow<CameraHudState?> = runtime.cameraHud
   val cameraFlashToken: StateFlow<Long> = runtime.cameraFlashToken
+  val screenRecordActive: StateFlow<Boolean> = runtime.screenRecordActive
 
   val instanceId: StateFlow<String> = runtime.instanceId
   val displayName: StateFlow<String> = runtime.displayName
@@ -35,6 +38,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   val voiceWakeMode: StateFlow<VoiceWakeMode> = runtime.voiceWakeMode
   val voiceWakeStatusText: StateFlow<String> = runtime.voiceWakeStatusText
   val voiceWakeIsListening: StateFlow<Boolean> = runtime.voiceWakeIsListening
+  val talkEnabled: StateFlow<Boolean> = runtime.talkEnabled
+  val talkStatusText: StateFlow<String> = runtime.talkStatusText
+  val talkIsListening: StateFlow<Boolean> = runtime.talkIsListening
+  val talkIsSpeaking: StateFlow<Boolean> = runtime.talkIsSpeaking
   val manualEnabled: StateFlow<Boolean> = runtime.manualEnabled
   val manualHost: StateFlow<String> = runtime.manualHost
   val manualPort: StateFlow<Int> = runtime.manualPort
@@ -93,6 +100,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
   fun setVoiceWakeMode(mode: VoiceWakeMode) {
     runtime.setVoiceWakeMode(mode)
+  }
+
+  fun setTalkEnabled(enabled: Boolean) {
+    runtime.setTalkEnabled(enabled)
   }
 
   fun connect(endpoint: BridgeEndpoint) {

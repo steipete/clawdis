@@ -14,6 +14,7 @@ struct MenuContent: View {
     private let heartbeatStore = HeartbeatStore.shared
     private let controlChannel = ControlChannel.shared
     private let activityStore = WorkActivityStore.shared
+    @Bindable private var pairingPrompter = NodePairingApprovalPrompter.shared
     @Environment(\.openSettings) private var openSettings
     @State private var availableMics: [AudioInputDevice] = []
     @State private var loadingMics = false
@@ -32,6 +33,13 @@ struct MenuContent: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(self.connectionLabel)
                     self.statusLine(label: self.healthStatus.label, color: self.healthStatus.color)
+                    if self.pairingPrompter.pendingCount > 0 {
+                        let repairCount = self.pairingPrompter.pendingRepairCount
+                        let repairSuffix = repairCount > 0 ? " · \(repairCount) repair" : ""
+                        self.statusLine(
+                            label: "Pairing approval pending (\(self.pairingPrompter.pendingCount))\(repairSuffix)",
+                            color: .orange)
+                    }
                 }
             }
             .disabled(self.state.connectionMode == .unconfigured)
@@ -102,6 +110,13 @@ struct MenuContent: View {
                         systemImage: "rectangle.inset.filled.on.rectangle")
                 }
             }
+            Button {
+                Task { await self.state.setTalkEnabled(!self.state.talkEnabled) }
+            } label: {
+                Label(self.state.talkEnabled ? "Stop Talk Mode" : "Talk Mode", systemImage: "waveform.circle.fill")
+            }
+            .disabled(!voiceWakeSupported)
+            .opacity(voiceWakeSupported ? 1 : 0.5)
             Divider()
             Button("Settings…") { self.open(tab: .general) }
                 .keyboardShortcut(",", modifiers: [.command])
@@ -194,10 +209,12 @@ struct MenuContent: View {
                     Label("Send Test Notification", systemImage: "bell")
                 }
                 Divider()
-                Button {
-                    DebugActions.restartGateway()
-                } label: {
-                    Label("Restart Gateway", systemImage: "arrow.clockwise")
+                if self.state.connectionMode == .local, !AppStateStore.attachExistingGatewayOnly {
+                    Button {
+                        DebugActions.restartGateway()
+                    } label: {
+                        Label("Restart Gateway", systemImage: "arrow.clockwise")
+                    }
                 }
                 Button {
                     DebugActions.restartApp()

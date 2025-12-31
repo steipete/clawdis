@@ -5,6 +5,11 @@ data class BridgeEndpoint(
   val name: String,
   val host: String,
   val port: Int,
+  val lanHost: String? = null,
+  val tailnetDns: String? = null,
+  val gatewayPort: Int? = null,
+  val bridgePort: Int? = null,
+  val canvasPort: Int? = null,
 ) {
   companion object {
     fun manual(host: String, port: Int): BridgeEndpoint =
@@ -16,4 +21,3 @@ data class BridgeEndpoint(
       )
   }
 }
-

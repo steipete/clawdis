@@ -22,12 +22,15 @@ final class NodeAppModel {
     var bridgeServerName: String?
     var bridgeRemoteAddress: String?
     var connectedBridgeID: String?
+    var seamColorHex: String?
+    var mainSessionKey: String = "main"
 
     private let bridge = BridgeSession()
     private var bridgeTask: Task<Void, Never>?
     private var voiceWakeSyncTask: Task<Void, Never>?
     @ObservationIgnored private var cameraHUDDismissTask: Task<Void, Never>?
     let voiceWake = VoiceWakeManager()
+    let talkMode = TalkModeManager()
     private var lastAutoA2uiURL: String?
 
     var bridgeSession: BridgeSession { self.bridge }
@@ -35,11 +38,12 @@ final class NodeAppModel {
     var cameraHUDText: String?
     var cameraHUDKind: CameraHUDKind?
     var cameraFlashNonce: Int = 0
+    var screenRecordActive: Bool = false
 
     init() {
         self.voiceWake.configure { [weak self] cmd in
             guard let self else { return }
-            let sessionKey = "main"
+            let sessionKey = await MainActor.run { self.mainSessionKey }
             do {
                 try await self.sendVoiceTranscript(text: cmd, sessionKey: sessionKey)
             } catch {
@@ -49,6 +53,9 @@ final class NodeAppModel {
 
         let enabled = UserDefaults.standard.bool(forKey: "voiceWake.enabled")
         self.voiceWake.setEnabled(enabled)
+        self.talkMode.attachBridge(self.bridge)
+        let talkEnabled = UserDefaults.standard.bool(forKey: "talk.enabled")
+        self.talkMode.setEnabled(talkEnabled)
 
         // Wire up deep links from canvas taps
         self.screen.onDeepLink = { [weak self] url in
@@ -145,7 +152,7 @@ final class NodeAppModel {
         guard let raw = await self.bridge.currentCanvasHostUrl() else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let base = URL(string: trimmed) else { return nil }
-        return base.appendingPathComponent("__clawdis__/a2ui/").absoluteString
+        return base.appendingPathComponent("__clawdis__/a2ui/").absoluteString + "?platform=ios"
     }
 
     private func showA2UIOnConnectIfNeeded() async {
@@ -175,6 +182,10 @@ final class NodeAppModel {
 
     func setVoiceWakeEnabled(_ enabled: Bool) {
         self.voiceWake.setEnabled(enabled)
+    }
+
+    func setTalkEnabled(_ enabled: Bool) {
+        self.talkMode.setEnabled(enabled)
     }
 
     func connectToBridge(
@@ -216,6 +227,7 @@ final class NodeAppModel {
                                     self.bridgeRemoteAddress = addr
                                 }
                             }
+                            await self.refreshBrandingFromGateway()
                             await self.startVoiceWakeSync()
                             await self.showA2UIOnConnectIfNeeded()
                         },
@@ -255,6 +267,8 @@ final class NodeAppModel {
                 self.bridgeServerName = nil
                 self.bridgeRemoteAddress = nil
                 self.connectedBridgeID = nil
+                self.seamColorHex = nil
+                self.mainSessionKey = "main"
                 self.showLocalCanvasOnDisconnect()
             }
         }
@@ -270,7 +284,45 @@ final class NodeAppModel {
         self.bridgeServerName = nil
         self.bridgeRemoteAddress = nil
         self.connectedBridgeID = nil
+        self.seamColorHex = nil
+        self.mainSessionKey = "main"
         self.showLocalCanvasOnDisconnect()
+    }
+
+    var seamColor: Color {
+        Self.color(fromHex: self.seamColorHex) ?? Self.defaultSeamColor
+    }
+
+    private static let defaultSeamColor = Color(red: 79 / 255.0, green: 122 / 255.0, blue: 154 / 255.0)
+
+    private static func color(fromHex raw: String?) -> Color? {
+        let trimmed = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let hex = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        guard hex.count == 6, let value = Int(hex, radix: 16) else { return nil }
+        let r = Double((value >> 16) & 0xFF) / 255.0
+        let g = Double((value >> 8) & 0xFF) / 255.0
+        let b = Double(value & 0xFF) / 255.0
+        return Color(red: r, green: g, blue: b)
+    }
+
+    private func refreshBrandingFromGateway() async {
+        do {
+            let res = try await self.bridge.request(method: "config.get", paramsJSON: "{}", timeoutSeconds: 8)
+            guard let json = try JSONSerialization.jsonObject(with: res) as? [String: Any] else { return }
+            guard let config = json["config"] as? [String: Any] else { return }
+            let ui = config["ui"] as? [String: Any]
+            let raw = (ui?["seamColor"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let session = config["session"] as? [String: Any]
+            let rawMainKey = (session?["mainKey"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let mainKey = rawMainKey.isEmpty ? "main" : rawMainKey
+            await MainActor.run {
+                self.seamColorHex = raw.isEmpty ? nil : raw
+                self.mainSessionKey = mainKey
+            }
+        } catch {
+            // ignore
+        }
     }
 
     func setGlobalWakeWords(_ words: [String]) async {
@@ -590,6 +642,9 @@ final class NodeAppModel {
                         NSLocalizedDescriptionKey: "INVALID_REQUEST: screen format must be mp4",
                     ])
                 }
+                // Status pill mirrors screen recording state so it stays visible without overlay stacking.
+                self.screenRecordActive = true
+                defer { self.screenRecordActive = false }
                 let path = try await self.screenRecorder.record(
                     screenIndex: params.screenIndex,
                     durationMs: params.durationMs,

@@ -3,8 +3,14 @@
 :root {
   --bg: #0a0e14;
   --bg-accent: #101826;
+  --bg-grad-1: #1a2740;
+  --bg-grad-2: #241626;
+  --bg-overlay: rgba(255, 255, 255, 0.03);
+  --bg-glow: rgba(54, 207, 201, 0.08);
   --panel: rgba(18, 24, 36, 0.92);
   --panel-strong: rgba(24, 32, 46, 0.95);
+  --chrome: rgba(10, 14, 20, 0.75);
+  --chrome-strong: rgba(10, 14, 20, 0.82);
   --text: rgba(246, 248, 252, 0.95);
   --muted: rgba(210, 218, 230, 0.62);
   --border: rgba(255, 255, 255, 0.08);
@@ -13,11 +19,35 @@
   --ok: #1bd98a;
   --warn: #f2c94c;
   --danger: #ff5c5c;
+  --theme-switch-x: 50%;
+  --theme-switch-y: 50%;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
   --font-body: "Space Grotesk", system-ui, sans-serif;
   --font-display: "Fraunces", "Times New Roman", serif;
   color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f7fb;
+  --bg-accent: #ffffff;
+  --bg-grad-1: #e3edf9;
+  --bg-grad-2: #f7e6f0;
+  --bg-overlay: rgba(28, 32, 46, 0.04);
+  --bg-glow: rgba(54, 207, 201, 0.12);
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-strong: rgba(255, 255, 255, 0.98);
+  --chrome: rgba(255, 255, 255, 0.72);
+  --chrome-strong: rgba(255, 255, 255, 0.82);
+  --text: rgba(20, 24, 36, 0.96);
+  --muted: rgba(50, 58, 76, 0.6);
+  --border: rgba(16, 24, 40, 0.12);
+  --accent: #ff7a3d;
+  --accent-2: #1bb9b1;
+  --ok: #15b97a;
+  --warn: #c58a1a;
+  --danger: #e84343;
+  color-scheme: light;
 }
 
 * {
@@ -32,9 +62,14 @@ body {
 body {
   margin: 0;
   font: 15px/1.4 var(--font-body);
-  background: radial-gradient(1200px 900px at 20% 0%, #1a2740 0%, var(--bg) 55%)
+  background: radial-gradient(
+        1200px 900px at 20% 0%,
+        var(--bg-grad-1) 0%,
+        var(--bg) 55%
+      )
       fixed,
-    radial-gradient(900px 700px at 90% 10%, #241626 0%, transparent 55%) fixed,
+    radial-gradient(900px 700px at 90% 10%, var(--bg-grad-2) 0%, transparent 55%)
+      fixed,
     var(--bg);
   color: var(--text);
 }
@@ -45,16 +80,53 @@ body::before {
   inset: 0;
   background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.03) 0%,
+      var(--bg-overlay) 0%,
       rgba(255, 255, 255, 0) 35%
     ),
     radial-gradient(
       600px 400px at 80% 80%,
-      rgba(54, 207, 201, 0.08),
+      var(--bg-glow),
       transparent 60%
     );
   pointer-events: none;
   z-index: 0;
+}
+
+@keyframes theme-circle-transition {
+  0% {
+    clip-path: circle(
+      0% at var(--theme-switch-x, 50%) var(--theme-switch-y, 50%)
+    );
+  }
+
+  100% {
+    clip-path: circle(
+      150% at var(--theme-switch-x, 50%) var(--theme-switch-y, 50%)
+    );
+  }
+}
+
+html.theme-transition {
+  view-transition-name: theme;
+}
+
+html.theme-transition::view-transition-old(theme) {
+  mix-blend-mode: normal;
+  animation: none;
+  z-index: 1;
+}
+
+html.theme-transition::view-transition-new(theme) {
+  mix-blend-mode: normal;
+  z-index: 2;
+  animation: theme-circle-transition 0.45s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition::view-transition-old(theme),
+  html.theme-transition::view-transition-new(theme) {
+    animation: none !important;
+  }
 }
 
 clawdis-app {
@@ -86,4 +158,3 @@ select {
     transform: translateY(0);
   }
 }
-

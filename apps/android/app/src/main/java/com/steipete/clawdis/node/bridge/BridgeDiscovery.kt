@@ -130,20 +130,36 @@ class BridgeDiscovery(
       object : NsdManager.ResolveListener {
         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
 
-        override fun onServiceResolved(resolved: NsdServiceInfo) {
-          val host = resolved.host?.hostAddress ?: return
-          val port = resolved.port
-          if (port <= 0) return
+      override fun onServiceResolved(resolved: NsdServiceInfo) {
+        val host = resolved.host?.hostAddress ?: return
+        val port = resolved.port
+        if (port <= 0) return
 
-          val rawServiceName = resolved.serviceName
-          val serviceName = BonjourEscapes.decode(rawServiceName)
-          val displayName = BonjourEscapes.decode(txt(resolved, "displayName") ?: serviceName)
-          val id = stableId(serviceName, "local.")
-          localById[id] = BridgeEndpoint(stableId = id, name = displayName, host = host, port = port)
-          publish()
-        }
-      },
-    )
+        val rawServiceName = resolved.serviceName
+        val serviceName = BonjourEscapes.decode(rawServiceName)
+        val displayName = BonjourEscapes.decode(txt(resolved, "displayName") ?: serviceName)
+        val lanHost = txt(resolved, "lanHost")
+        val tailnetDns = txt(resolved, "tailnetDns")
+        val gatewayPort = txtInt(resolved, "gatewayPort")
+        val bridgePort = txtInt(resolved, "bridgePort")
+        val canvasPort = txtInt(resolved, "canvasPort")
+        val id = stableId(serviceName, "local.")
+        localById[id] =
+          BridgeEndpoint(
+            stableId = id,
+            name = displayName,
+            host = host,
+            port = port,
+            lanHost = lanHost,
+            tailnetDns = tailnetDns,
+            gatewayPort = gatewayPort,
+            bridgePort = bridgePort,
+            canvasPort = canvasPort,
+          )
+        publish()
+      }
+    },
+  )
   }
 
   private fun publish() {
@@ -189,6 +205,10 @@ class BridgeDiscovery(
     }
   }
 
+  private fun txtInt(info: NsdServiceInfo, key: String): Int? {
+    return txt(info, key)?.toIntOrNull()
+  }
+
   private suspend fun refreshUnicast(domain: String) {
     val ptrName = "${serviceType}${domain}"
     val ptrMsg = lookupUnicastMessage(ptrName, Type.PTR) ?: return
@@ -227,8 +247,24 @@ class BridgeDiscovery(
         }
       val instanceName = BonjourEscapes.decode(decodeInstanceName(instanceFqdn, domain))
       val displayName = BonjourEscapes.decode(txtValue(txt, "displayName") ?: instanceName)
+      val lanHost = txtValue(txt, "lanHost")
+      val tailnetDns = txtValue(txt, "tailnetDns")
+      val gatewayPort = txtIntValue(txt, "gatewayPort")
+      val bridgePort = txtIntValue(txt, "bridgePort")
+      val canvasPort = txtIntValue(txt, "canvasPort")
       val id = stableId(instanceName, domain)
-      next[id] = BridgeEndpoint(stableId = id, name = displayName, host = host, port = port)
+      next[id] =
+        BridgeEndpoint(
+          stableId = id,
+          name = displayName,
+          host = host,
+          port = port,
+          lanHost = lanHost,
+          tailnetDns = tailnetDns,
+          gatewayPort = gatewayPort,
+          bridgePort = bridgePort,
+          canvasPort = canvasPort,
+        )
     }
 
     unicastById.clear()
@@ -432,6 +468,10 @@ class BridgeDiscovery(
       }
     }
     return null
+  }
+
+  private fun txtIntValue(records: List<TXTRecord>, key: String): Int? {
+    return txtValue(records, key)?.toIntOrNull()
   }
 
   private fun decodeDnsTxtString(raw: String): String {

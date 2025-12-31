@@ -2,6 +2,7 @@ import AppKit
 import ClawdisIPC
 import ClawdisProtocol
 import Foundation
+import Observation
 import OSLog
 import UserNotifications
 
@@ -15,6 +16,7 @@ enum NodePairingReconcilePolicy {
 }
 
 @MainActor
+@Observable
 final class NodePairingApprovalPrompter {
     static let shared = NodePairingApprovalPrompter()
 
@@ -26,6 +28,8 @@ final class NodePairingApprovalPrompter {
     private var isStopping = false
     private var isPresenting = false
     private var queue: [PendingRequest] = []
+    var pendingCount: Int = 0
+    var pendingRepairCount: Int = 0
     private var activeAlert: NSAlert?
     private var activeRequestId: String?
     private var alertHostWindow: NSWindow?
@@ -104,6 +108,7 @@ final class NodePairingApprovalPrompter {
         self.reconcileOnceTask?.cancel()
         self.reconcileOnceTask = nil
         self.queue.removeAll(keepingCapacity: false)
+        self.updatePendingCounts()
         self.isPresenting = false
         self.activeRequestId = nil
         self.alertHostWindow?.orderOut(nil)
@@ -292,6 +297,7 @@ final class NodePairingApprovalPrompter {
     private func enqueue(_ req: PendingRequest) {
         if self.queue.contains(req) { return }
         self.queue.append(req)
+        self.updatePendingCounts()
         self.presentNextIfNeeded()
         self.updateReconcileLoop()
     }
@@ -362,6 +368,7 @@ final class NodePairingApprovalPrompter {
             } else {
                 self.queue.removeAll { $0 == request }
             }
+            self.updatePendingCounts()
             self.isPresenting = false
             self.presentNextIfNeeded()
             self.updateReconcileLoop()
@@ -501,6 +508,8 @@ final class NodePairingApprovalPrompter {
         } else {
             self.queue.removeAll { $0 == req }
         }
+
+        self.updatePendingCounts()
         self.isPresenting = false
         self.presentNextIfNeeded()
         self.updateReconcileLoop()
@@ -599,6 +608,12 @@ final class NodePairingApprovalPrompter {
         }
     }
 
+    private func updatePendingCounts() {
+        // Keep a cheap observable summary for the menu bar status line.
+        self.pendingCount = self.queue.count
+        self.pendingRepairCount = self.queue.filter { $0.isRepair == true }.count
+    }
+
     private func reconcileOnce(timeoutMs: Double) async {
         if self.isStopping { return }
         if self.reconcileInFlight { return }
@@ -643,6 +658,7 @@ final class NodePairingApprovalPrompter {
             return
         }
         self.queue.removeAll { $0.requestId == resolved.requestId }
+        self.updatePendingCounts()
         Task { @MainActor in
             await self.notify(resolution: resolution, request: request, via: "remote")
         }

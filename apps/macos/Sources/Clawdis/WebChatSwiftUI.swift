@@ -155,7 +155,8 @@ final class WebChatSwiftUIWindowController {
         self.sessionKey = sessionKey
         self.presentation = presentation
         let vm = ClawdisChatViewModel(sessionKey: sessionKey, transport: transport)
-        self.hosting = NSHostingController(rootView: ClawdisChatView(viewModel: vm))
+        let accent = Self.color(fromHex: AppStateStore.shared.seamColorHex)
+        self.hosting = NSHostingController(rootView: ClawdisChatView(viewModel: vm, userAccent: accent))
         self.contentController = Self.makeContentController(for: presentation, hosting: self.hosting)
         self.window = Self.makeWindow(for: presentation, contentViewController: self.contentController)
     }
@@ -354,5 +355,16 @@ final class WebChatSwiftUIWindowController {
             let frame = WindowPlacement.centeredFrame(size: WebChatSwiftUILayout.windowSize)
             window.setFrame(frame, display: false)
         }
+    }
+
+    private static func color(fromHex raw: String?) -> Color? {
+        let trimmed = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let hex = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        guard hex.count == 6, let value = Int(hex, radix: 16) else { return nil }
+        let r = Double((value >> 16) & 0xFF) / 255.0
+        let g = Double((value >> 8) & 0xFF) / 255.0
+        let b = Double(value & 0xFF) / 255.0
+        return Color(red: r, green: g, blue: b)
     }
 }

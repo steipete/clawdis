@@ -43,7 +43,8 @@ struct ConnectionsSettingsSmokeTests {
                     elapsedMs: 120,
                     bot: ProvidersStatusSnapshot.TelegramBot(id: 123, username: "clawdisbot"),
                     webhook: ProvidersStatusSnapshot.TelegramWebhook(url: "https://example.com/hook", hasCustomCert: false)),
-                lastProbeAt: 1_700_000_050_000))
+                lastProbeAt: 1_700_000_050_000),
+            discord: nil)
 
         store.whatsappLoginMessage = "Scan QR"
         store.whatsappLoginQrDataUrl =
@@ -92,7 +93,8 @@ struct ConnectionsSettingsSmokeTests {
                     elapsedMs: 120,
                     bot: nil,
                     webhook: nil),
-                lastProbeAt: 1_700_000_100_000))
+                lastProbeAt: 1_700_000_100_000),
+            discord: nil)
 
         let view = ConnectionsSettings(store: store)
         _ = view.body

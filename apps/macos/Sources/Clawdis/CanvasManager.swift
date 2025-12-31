@@ -190,7 +190,7 @@ final class CanvasManager {
     private static func resolveA2UIHostUrl(from raw: String?) -> String? {
         let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmed.isEmpty, let base = URL(string: trimmed) else { return nil }
-        return base.appendingPathComponent("__clawdis__/a2ui/").absoluteString
+        return base.appendingPathComponent("__clawdis__/a2ui/").absoluteString + "?platform=macos"
     }
 
     // MARK: - Anchoring

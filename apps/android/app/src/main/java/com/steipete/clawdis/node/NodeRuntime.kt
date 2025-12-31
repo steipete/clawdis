@@ -25,6 +25,7 @@ import com.steipete.clawdis.node.protocol.ClawdisCanvasA2UIAction
 import com.steipete.clawdis.node.protocol.ClawdisCanvasA2UICommand
 import com.steipete.clawdis.node.protocol.ClawdisCanvasCommand
 import com.steipete.clawdis.node.protocol.ClawdisScreenCommand
+import com.steipete.clawdis.node.voice.TalkModeManager
 import com.steipete.clawdis.node.voice.VoiceWakeManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +70,7 @@ class NodeRuntime(context: Context) {
           payloadJson =
             buildJsonObject {
               put("message", JsonPrimitive(command))
-              put("sessionKey", JsonPrimitive("main"))
+              put("sessionKey", JsonPrimitive(mainSessionKey.value))
               put("thinking", JsonPrimitive(chatThinkingLevel.value))
               put("deliver", JsonPrimitive(false))
             }.toString(),
@@ -84,6 +85,15 @@ class NodeRuntime(context: Context) {
   val voiceWakeStatusText: StateFlow<String>
     get() = voiceWake.statusText
 
+  val talkStatusText: StateFlow<String>
+    get() = talkMode.statusText
+
+  val talkIsListening: StateFlow<Boolean>
+    get() = talkMode.isListening
+
+  val talkIsSpeaking: StateFlow<Boolean>
+    get() = talkMode.isSpeaking
+
   private val discovery = BridgeDiscovery(appContext, scope = scope)
   val bridges: StateFlow<List<BridgeEndpoint>> = discovery.bridges
   val discoveryStatusText: StateFlow<String> = discovery.statusText
@@ -94,6 +104,9 @@ class NodeRuntime(context: Context) {
   private val _statusText = MutableStateFlow("Offline")
   val statusText: StateFlow<String> = _statusText.asStateFlow()
 
+  private val _mainSessionKey = MutableStateFlow("main")
+  val mainSessionKey: StateFlow<String> = _mainSessionKey.asStateFlow()
+
   private val cameraHudSeq = AtomicLong(0)
   private val _cameraHud = MutableStateFlow<CameraHudState?>(null)
   val cameraHud: StateFlow<CameraHudState?> = _cameraHud.asStateFlow()
@@ -101,11 +114,17 @@ class NodeRuntime(context: Context) {
   private val _cameraFlashToken = MutableStateFlow(0L)
   val cameraFlashToken: StateFlow<Long> = _cameraFlashToken.asStateFlow()
 
+  private val _screenRecordActive = MutableStateFlow(false)
+  val screenRecordActive: StateFlow<Boolean> = _screenRecordActive.asStateFlow()
+
   private val _serverName = MutableStateFlow<String?>(null)
   val serverName: StateFlow<String?> = _serverName.asStateFlow()
 
   private val _remoteAddress = MutableStateFlow<String?>(null)
   val remoteAddress: StateFlow<String?> = _remoteAddress.asStateFlow()
+
+  private val _seamColorArgb = MutableStateFlow(DEFAULT_SEAM_COLOR_ARGB)
+  val seamColorArgb: StateFlow<Long> = _seamColorArgb.asStateFlow()
 
   private val _isForeground = MutableStateFlow(true)
   val isForeground: StateFlow<Boolean> = _isForeground.asStateFlow()
@@ -120,6 +139,8 @@ class NodeRuntime(context: Context) {
         _serverName.value = name
         _remoteAddress.value = remote
         _isConnected.value = true
+        _seamColorArgb.value = DEFAULT_SEAM_COLOR_ARGB
+        scope.launch { refreshBrandingFromGateway() }
         scope.launch { refreshWakeWordsFromGateway() }
         maybeNavigateToA2uiOnConnect()
       },
@@ -133,12 +154,17 @@ class NodeRuntime(context: Context) {
     )
 
   private val chat = ChatController(scope = scope, session = session, json = json)
+  private val talkMode: TalkModeManager by lazy {
+    TalkModeManager(context = appContext, scope = scope).also { it.attachSession(session) }
+  }
 
   private fun handleSessionDisconnected(message: String) {
     _statusText.value = message
     _serverName.value = null
     _remoteAddress.value = null
     _isConnected.value = false
+    _seamColorArgb.value = DEFAULT_SEAM_COLOR_ARGB
+    _mainSessionKey.value = "main"
     chat.onDisconnected(message)
     showLocalCanvasOnDisconnect()
   }
@@ -163,6 +189,7 @@ class NodeRuntime(context: Context) {
   val preventSleep: StateFlow<Boolean> = prefs.preventSleep
   val wakeWords: StateFlow<List<String>> = prefs.wakeWords
   val voiceWakeMode: StateFlow<VoiceWakeMode> = prefs.voiceWakeMode
+  val talkEnabled: StateFlow<Boolean> = prefs.talkEnabled
   val manualEnabled: StateFlow<Boolean> = prefs.manualEnabled
   val manualHost: StateFlow<String> = prefs.manualHost
   val manualPort: StateFlow<Int> = prefs.manualPort
@@ -216,6 +243,13 @@ class NodeRuntime(context: Context) {
 
           voiceWake.start()
         }
+    }
+
+    scope.launch {
+      talkEnabled.collect { enabled ->
+        talkMode.setEnabled(enabled)
+        externalAudioCaptureActive.value = enabled
+      }
     }
 
     scope.launch(Dispatchers.Default) {
@@ -309,6 +343,10 @@ class NodeRuntime(context: Context) {
 
   fun setVoiceWakeMode(mode: VoiceWakeMode) {
     prefs.setVoiceWakeMode(mode)
+  }
+
+  fun setTalkEnabled(value: Boolean) {
+    prefs.setTalkEnabled(value)
   }
 
   fun connect(endpoint: BridgeEndpoint) {
@@ -548,6 +586,7 @@ class NodeRuntime(context: Context) {
       return
     }
 
+    talkMode.handleBridgeEvent(event, payloadJson)
     chat.handleBridgeEvent(event, payloadJson)
   }
 
@@ -584,6 +623,25 @@ class NodeRuntime(context: Context) {
       val array = payload["triggers"] as? JsonArray ?: return
       val triggers = array.mapNotNull { it.asStringOrNull() }
       applyWakeWordsFromGateway(triggers)
+    } catch (_: Throwable) {
+      // ignore
+    }
+  }
+
+  private suspend fun refreshBrandingFromGateway() {
+    if (!_isConnected.value) return
+    try {
+      val res = session.request("config.get", "{}")
+      val root = json.parseToJsonElement(res).asObjectOrNull()
+      val config = root?.get("config").asObjectOrNull()
+      val ui = config?.get("ui").asObjectOrNull()
+      val raw = ui?.get("seamColor").asStringOrNull()?.trim()
+      val sessionCfg = config?.get("session").asObjectOrNull()
+      val rawMainKey = sessionCfg?.get("mainKey").asStringOrNull()?.trim()
+      _mainSessionKey.value = rawMainKey?.takeIf { it.isNotEmpty() } ?: "main"
+
+      val parsed = parseHexColorArgb(raw)
+      _seamColorArgb.value = parsed ?: DEFAULT_SEAM_COLOR_ARGB
     } catch (_: Throwable) {
       // ignore
     }
@@ -730,14 +788,20 @@ class NodeRuntime(context: Context) {
         }
       }
       ClawdisScreenCommand.Record.rawValue -> {
-        val res =
-          try {
-            screenRecorder.record(paramsJson)
-          } catch (err: Throwable) {
-            val (code, message) = invokeErrorFromThrowable(err)
-            return BridgeSession.InvokeResult.error(code = code, message = message)
-          }
-        BridgeSession.InvokeResult.ok(res.payloadJson)
+        // Status pill mirrors screen recording state so it stays visible without overlay stacking.
+        _screenRecordActive.value = true
+        try {
+          val res =
+            try {
+              screenRecorder.record(paramsJson)
+            } catch (err: Throwable) {
+              val (code, message) = invokeErrorFromThrowable(err)
+              return BridgeSession.InvokeResult.error(code = code, message = message)
+            }
+          BridgeSession.InvokeResult.ok(res.payloadJson)
+        } finally {
+          _screenRecordActive.value = false
+        }
       }
       else ->
         BridgeSession.InvokeResult.error(
@@ -780,7 +844,7 @@ class NodeRuntime(context: Context) {
     val raw = session.currentCanvasHostUrl()?.trim().orEmpty()
     if (raw.isBlank()) return null
     val base = raw.trimEnd('/')
-    return "${base}/__clawdis__/a2ui/"
+    return "${base}/__clawdis__/a2ui/?platform=android"
   }
 
   private suspend fun ensureA2uiReady(a2uiUrl: String): Boolean {
@@ -866,6 +930,8 @@ class NodeRuntime(context: Context) {
 
 private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
+private const val DEFAULT_SEAM_COLOR_ARGB: Long = 0xFF4F7A9A
+
 private const val a2uiReadyCheckJS: String =
   """
   (() => {
@@ -920,3 +986,12 @@ private fun JsonElement?.asStringOrNull(): String? =
     is JsonPrimitive -> content
     else -> null
   }
+
+private fun parseHexColorArgb(raw: String?): Long? {
+  val trimmed = raw?.trim().orEmpty()
+  if (trimmed.isEmpty()) return null
+  val hex = if (trimmed.startsWith("#")) trimmed.drop(1) else trimmed
+  if (hex.length != 6) return null
+  val rgb = hex.toLongOrNull(16) ?: return null
+  return 0xFF000000L or rgb
+}

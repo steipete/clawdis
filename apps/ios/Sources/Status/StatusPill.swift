@@ -28,8 +28,15 @@ struct StatusPill: View {
         }
     }
 
+    struct Activity: Equatable {
+        var title: String
+        var systemImage: String
+        var tint: Color?
+    }
+
     var bridge: BridgeState
     var voiceWakeEnabled: Bool
+    var activity: Activity?
     var brighten: Bool = false
     var onTap: () -> Void
 
@@ -54,10 +61,24 @@ struct StatusPill: View {
                     .frame(height: 14)
                     .opacity(0.35)
 
-                Image(systemName: self.voiceWakeEnabled ? "mic.fill" : "mic.slash")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(self.voiceWakeEnabled ? .primary : .secondary)
-                    .accessibilityLabel(self.voiceWakeEnabled ? "Voice Wake enabled" : "Voice Wake disabled")
+                if let activity {
+                    HStack(spacing: 6) {
+                        Image(systemName: activity.systemImage)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(activity.tint ?? .primary)
+                        Text(activity.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    Image(systemName: self.voiceWakeEnabled ? "mic.fill" : "mic.slash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(self.voiceWakeEnabled ? .primary : .secondary)
+                        .accessibilityLabel(self.voiceWakeEnabled ? "Voice Wake enabled" : "Voice Wake disabled")
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
@@ -73,7 +94,7 @@ struct StatusPill: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Status")
-        .accessibilityValue("\(self.bridge.title), Voice Wake \(self.voiceWakeEnabled ? "enabled" : "disabled")")
+        .accessibilityValue(self.accessibilityValue)
         .onAppear { self.updatePulse(for: self.bridge, scenePhase: self.scenePhase) }
         .onDisappear { self.pulse = false }
         .onChange(of: self.bridge) { _, newValue in
@@ -82,6 +103,14 @@ struct StatusPill: View {
         .onChange(of: self.scenePhase) { _, newValue in
             self.updatePulse(for: self.bridge, scenePhase: newValue)
         }
+        .animation(.easeInOut(duration: 0.18), value: self.activity?.title)
+    }
+
+    private var accessibilityValue: String {
+        if let activity {
+            return "\(self.bridge.title), \(activity.title)"
+        }
+        return "\(self.bridge.title), Voice Wake \(self.voiceWakeEnabled ? "enabled" : "disabled")"
     }
 
     private func updatePulse(for bridge: BridgeState, scenePhase: ScenePhase) {

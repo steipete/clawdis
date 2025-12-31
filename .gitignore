@@ -8,6 +8,7 @@ coverage
 .worktrees/
 .DS_Store
 **/.DS_Store
+ui/src/ui/__screenshots__/
 
 # Bun build artifacts
 *.bun-build

@@ -1,7 +1,16 @@
 import { html, nothing } from "lit";
 
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway";
-import { TAB_GROUPS, subtitleForTab, titleForTab, type Tab } from "./navigation";
+import {
+  TAB_GROUPS,
+  pathForTab,
+  subtitleForTab,
+  titleForTab,
+  type Tab,
+} from "./navigation";
+import type { UiSettings } from "./storage";
+import type { ThemeMode } from "./theme";
+import type { ThemeTransitionContext } from "./theme-transition";
 import type {
   ConfigSnapshot,
   CronJob,
@@ -48,10 +57,13 @@ export type EventLogEntry = {
 };
 
 export type AppViewState = {
-  settings: { gatewayUrl: string; token: string; sessionKey: string };
+  settings: UiSettings;
   password: string;
   tab: Tab;
+  basePath: string;
   connected: boolean;
+  theme: ThemeMode;
+  themeResolved: "light" | "dark";
   hello: GatewayHelloOk | null;
   lastError: string | null;
   eventLog: EventLogEntry[];
@@ -120,7 +132,8 @@ export type AppViewState = {
   client: GatewayBrowserClient | null;
   connect: () => void;
   setTab: (tab: Tab) => void;
-  applySettings: (next: AppViewState["settings"]) => void;
+  setTheme: (theme: ThemeMode, context?: ThemeTransitionContext) => void;
+  applySettings: (next: UiSettings) => void;
   loadOverview: () => Promise<void>;
   loadCron: () => Promise<void>;
   handleWhatsAppStart: (force: boolean) => Promise<void>;
@@ -134,6 +147,16 @@ export function renderApp(state: AppViewState) {
   const presenceCount = state.presenceEntries.length;
   const sessionsCount = state.sessionsResult?.count ?? null;
   const cronNext = state.cronStatus?.nextWakeAtMs ?? null;
+  const hasConnectedMobileNode = state.nodes.some((n) => {
+    if (!Boolean(n.connected)) return false;
+    const p = typeof n.platform === "string" ? n.platform.trim().toLowerCase() : "";
+    return p.startsWith("ios") || p.startsWith("ipados") || p.startsWith("android");
+  });
+  const chatDisabledReason = !state.connected
+    ? "Disconnected from gateway."
+    : hasConnectedMobileNode
+      ? null
+      : "No connected iOS/Android node — Web Chat + Talk are disabled.";
 
   return html`
     <div class="shell">
@@ -148,6 +171,7 @@ export function renderApp(state: AppViewState) {
             <span>Health</span>
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
+          ${renderThemeToggle(state)}
         </div>
       </header>
       <aside class="nav">
@@ -308,6 +332,8 @@ export function renderApp(state: AppViewState) {
               stream: state.chatStream,
               draft: state.chatMessage,
               connected: state.connected,
+              canSend: state.connected && hasConnectedMobileNode,
+              disabledReason: chatDisabledReason,
               onRefresh: () => loadChatHistory(state),
               onDraftChange: (next) => (state.chatMessage = next),
               onSend: () => state.handleSendChat(),
@@ -352,12 +378,113 @@ export function renderApp(state: AppViewState) {
 }
 
 function renderTab(state: AppViewState, tab: Tab) {
+  const href = pathForTab(tab, state.basePath);
   return html`
-    <button
+    <a
+      href=${href}
       class="nav-item ${state.tab === tab ? "active" : ""}"
-      @click=${() => state.setTab(tab)}
+      @click=${(event: MouseEvent) => {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        state.setTab(tab);
+      }}
     >
       <span>${titleForTab(tab)}</span>
-    </button>
+    </a>
+  `;
+}
+
+const THEME_ORDER: ThemeMode[] = ["system", "light", "dark"];
+
+function renderThemeToggle(state: AppViewState) {
+  const index = Math.max(0, THEME_ORDER.indexOf(state.theme));
+  const applyTheme = (next: ThemeMode) => (event: MouseEvent) => {
+    const element = event.currentTarget as HTMLElement;
+    const context: ThemeTransitionContext = { element };
+    if (event.clientX || event.clientY) {
+      context.pointerClientX = event.clientX;
+      context.pointerClientY = event.clientY;
+    }
+    state.setTheme(next, context);
+  };
+
+  return html`
+    <div class="theme-toggle" style="--theme-index: ${index};">
+      <div class="theme-toggle__track" role="group" aria-label="Theme">
+        <span class="theme-toggle__indicator"></span>
+        <button
+          class="theme-toggle__button ${state.theme === "system" ? "active" : ""}"
+          @click=${applyTheme("system")}
+          aria-pressed=${state.theme === "system"}
+          aria-label="System theme"
+          title="System"
+        >
+          ${renderMonitorIcon()}
+        </button>
+        <button
+          class="theme-toggle__button ${state.theme === "light" ? "active" : ""}"
+          @click=${applyTheme("light")}
+          aria-pressed=${state.theme === "light"}
+          aria-label="Light theme"
+          title="Light"
+        >
+          ${renderSunIcon()}
+        </button>
+        <button
+          class="theme-toggle__button ${state.theme === "dark" ? "active" : ""}"
+          @click=${applyTheme("dark")}
+          aria-pressed=${state.theme === "dark"}
+          aria-label="Dark theme"
+          title="Dark"
+        >
+          ${renderMoonIcon()}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSunIcon() {
+  return html`
+    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2"></path>
+      <path d="M12 20v2"></path>
+      <path d="m4.93 4.93 1.41 1.41"></path>
+      <path d="m17.66 17.66 1.41 1.41"></path>
+      <path d="M2 12h2"></path>
+      <path d="M20 12h2"></path>
+      <path d="m6.34 17.66-1.41 1.41"></path>
+      <path d="m19.07 4.93-1.41 1.41"></path>
+    </svg>
+  `;
+}
+
+function renderMoonIcon() {
+  return html`
+    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"
+      ></path>
+    </svg>
+  `;
+}
+
+function renderMonitorIcon() {
+  return html`
+    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+      <line x1="8" x2="16" y1="21" y2="21"></line>
+      <line x1="12" x2="12" y1="17" y2="21"></line>
+    </svg>
   `;
 }

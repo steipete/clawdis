@@ -137,9 +137,10 @@ private struct ChatBubbleShape: InsettableShape {
 struct ChatMessageBubble: View {
     let message: ClawdisChatMessage
     let style: ClawdisChatView.Style
+    let userAccent: Color?
 
     var body: some View {
-        ChatMessageBody(message: self.message, isUser: self.isUser, style: self.style)
+        ChatMessageBody(message: self.message, isUser: self.isUser, style: self.style, userAccent: self.userAccent)
             .frame(maxWidth: ChatUIConstants.bubbleMaxWidth, alignment: self.isUser ? .trailing : .leading)
             .frame(maxWidth: .infinity, alignment: self.isUser ? .trailing : .leading)
             .padding(.horizontal, 2)
@@ -153,6 +154,7 @@ private struct ChatMessageBody: View {
     let message: ClawdisChatMessage
     let isUser: Bool
     let style: ClawdisChatView.Style
+    let userAccent: Color?
 
     var body: some View {
         let text = self.primaryText
@@ -287,7 +289,7 @@ private struct ChatMessageBody: View {
 
     private var bubbleFillColor: Color {
         if self.isUser {
-            return ClawdisChatTheme.userBubble
+            return self.userAccent ?? ClawdisChatTheme.userBubble
         }
         if self.style == .onboarding {
             return ClawdisChatTheme.onboardingAssistantBubble

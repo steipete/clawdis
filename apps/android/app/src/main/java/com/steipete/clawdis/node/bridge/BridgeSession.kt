@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.steipete.clawdis.node.BuildConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -23,6 +24,7 @@ import java.io.BufferedWriter
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.InetSocketAddress
+import java.net.URI
 import java.net.Socket
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -75,6 +77,8 @@ class BridgeSession(
 
   fun disconnect() {
     desired = null
+    // Unblock connectOnce() read loop. Coroutine cancellation alone won't interrupt BufferedReader.readLine().
+    currentConnection?.closeQuietly()
     scope.launch(Dispatchers.IO) {
       job?.cancelAndJoin()
       job = null
@@ -213,7 +217,17 @@ class BridgeSession(
         when (first["type"].asStringOrNull()) {
           "hello-ok" -> {
             val name = first["serverName"].asStringOrNull() ?: "Bridge"
-            canvasHostUrl = first["canvasHostUrl"].asStringOrNull()?.trim()?.ifEmpty { null }
+            val rawCanvasUrl = first["canvasHostUrl"].asStringOrNull()?.trim()?.ifEmpty { null }
+            canvasHostUrl = normalizeCanvasHostUrl(rawCanvasUrl, endpoint)
+            if (BuildConfig.DEBUG) {
+              // Local JVM unit tests use android.jar stubs; Log.d can throw "not mocked".
+              runCatching {
+                android.util.Log.d(
+                  "ClawdisBridge",
+                  "canvasHostUrl resolved=${canvasHostUrl ?: "none"} (raw=${rawCanvasUrl ?: "none"})",
+                )
+              }
+            }
             onConnected(name, conn.remoteAddress)
           }
           "error" -> {
@@ -292,6 +306,37 @@ class BridgeSession(
         conn.closeQuietly()
       }
     }
+
+  private fun normalizeCanvasHostUrl(raw: String?, endpoint: BridgeEndpoint): String? {
+    val trimmed = raw?.trim().orEmpty()
+    val parsed = trimmed.takeIf { it.isNotBlank() }?.let { runCatching { URI(it) }.getOrNull() }
+    val host = parsed?.host?.trim().orEmpty()
+    val port = parsed?.port ?: -1
+    val scheme = parsed?.scheme?.trim().orEmpty().ifBlank { "http" }
+
+    if (trimmed.isNotBlank() && !isLoopbackHost(host)) {
+      return trimmed
+    }
+
+    val fallbackHost =
+      endpoint.tailnetDns?.trim().takeIf { !it.isNullOrEmpty() }
+        ?: endpoint.lanHost?.trim().takeIf { !it.isNullOrEmpty() }
+        ?: endpoint.host.trim()
+    if (fallbackHost.isEmpty()) return trimmed.ifBlank { null }
+
+    val fallbackPort = endpoint.canvasPort ?: if (port > 0) port else 18793
+    val formattedHost = if (fallbackHost.contains(":")) "[${fallbackHost}]" else fallbackHost
+    return "$scheme://$formattedHost:$fallbackPort"
+  }
+
+  private fun isLoopbackHost(raw: String?): Boolean {
+    val host = raw?.trim()?.lowercase().orEmpty()
+    if (host.isEmpty()) return false
+    if (host == "localhost") return true
+    if (host == "::1") return true
+    if (host == "0.0.0.0" || host == "::") return true
+    return host.startsWith("127.")
+  }
 }
 
 private fun JsonElement?.asObjectOrNull(): JsonObject? = this as? JsonObject

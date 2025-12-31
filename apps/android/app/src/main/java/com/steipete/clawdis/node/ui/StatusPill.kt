@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 fun StatusPill(
   bridge: BridgeState,
   voiceEnabled: Boolean,
+  activity: StatusActivity? = null,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -62,22 +63,48 @@ fun StatusPill(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      Icon(
-        imageVector = if (voiceEnabled) Icons.Default.Mic else Icons.Default.MicOff,
-        contentDescription = if (voiceEnabled) "Voice enabled" else "Voice disabled",
-        tint =
-          if (voiceEnabled) {
-            overlayIconColor()
-          } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-          },
-        modifier = Modifier.size(18.dp),
-      )
+      if (activity != null) {
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(
+            imageVector = activity.icon,
+            contentDescription = activity.contentDescription,
+            tint = activity.tint ?: overlayIconColor(),
+            modifier = Modifier.size(18.dp),
+          )
+          Text(
+            text = activity.title,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+          )
+        }
+      } else {
+        Icon(
+          imageVector = if (voiceEnabled) Icons.Default.Mic else Icons.Default.MicOff,
+          contentDescription = if (voiceEnabled) "Voice enabled" else "Voice disabled",
+          tint =
+            if (voiceEnabled) {
+              overlayIconColor()
+            } else {
+              MaterialTheme.colorScheme.onSurfaceVariant
+            },
+          modifier = Modifier.size(18.dp),
+        )
+      }
 
       Spacer(modifier = Modifier.width(2.dp))
     }
   }
 }
+
+data class StatusActivity(
+  val title: String,
+  val icon: androidx.compose.ui.graphics.vector.ImageVector,
+  val contentDescription: String,
+  val tint: Color? = null,
+)
 
 enum class BridgeState(val title: String, val color: Color) {
   Connected("Connected", Color(0xFF2ECC71)),

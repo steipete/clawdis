@@ -78,6 +78,12 @@ export async function monitorWebInbox(options: {
   const onClose = new Promise<WebListenerCloseReason>((resolve) => {
     onCloseResolve = resolve;
   });
+  const resolveClose = (reason: WebListenerCloseReason) => {
+    if (!onCloseResolve) return;
+    const resolver = onCloseResolve;
+    onCloseResolve = null;
+    resolver(reason);
+  };
   try {
     // Advertise that the gateway is online right after connecting.
     await sock.sendPresenceUpdate("available");
@@ -310,7 +316,7 @@ export async function monitorWebInbox(options: {
     try {
       if (update.connection === "close") {
         const status = getStatusCode(update.lastDisconnect?.error);
-        onCloseResolve?.({
+        resolveClose({
           status,
           isLoggedOut: status === DisconnectReason.loggedOut,
           error: update.lastDisconnect?.error,
@@ -321,7 +327,7 @@ export async function monitorWebInbox(options: {
         { error: String(err) },
         "connection.update handler error",
       );
-      onCloseResolve?.({
+      resolveClose({
         status: undefined,
         isLoggedOut: false,
         error: err,
@@ -359,6 +365,11 @@ export async function monitorWebInbox(options: {
       }
     },
     onClose,
+    signalClose: (reason?: WebListenerCloseReason) => {
+      resolveClose(
+        reason ?? { status: undefined, isLoggedOut: false, error: "closed" },
+      );
+    },
     /**
      * Send a message through this connection's socket.
      * Used by IPC to avoid creating new connections.

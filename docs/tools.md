@@ -51,6 +51,7 @@ Notes:
 - Uses `browser.controlUrl` unless `controlUrl` is passed explicitly.
 - `snapshot` defaults to `ai`; use `aria` for the accessibility tree.
 - `act` requires `ref` from `snapshot --format ai`; use `evaluate` for rare CSS selector needs.
+- Avoid `act` → `wait` by default; use it only in exceptional cases (no reliable UI state to wait on).
 
 ### `clawdis_canvas`
 Drive the node Canvas (present, eval, snapshot, A2UI).

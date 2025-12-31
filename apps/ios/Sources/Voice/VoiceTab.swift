@@ -4,6 +4,7 @@ struct VoiceTab: View {
     @Environment(NodeAppModel.self) private var appModel
     @Environment(VoiceWakeManager.self) private var voiceWake
     @AppStorage("voiceWake.enabled") private var voiceWakeEnabled: Bool = false
+    @AppStorage("talk.enabled") private var talkEnabled: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -14,6 +15,7 @@ struct VoiceTab: View {
                     Text(self.voiceWake.statusText)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    LabeledContent("Talk Mode", value: self.talkEnabled ? "Enabled" : "Disabled")
                 }
 
                 Section("Notes") {
@@ -35,6 +37,9 @@ struct VoiceTab: View {
             .navigationTitle("Voice")
             .onChange(of: self.voiceWakeEnabled) { _, newValue in
                 self.appModel.setVoiceWakeEnabled(newValue)
+            }
+            .onChange(of: self.talkEnabled) { _, newValue in
+                self.appModel.setTalkEnabled(newValue)
             }
         }
     }

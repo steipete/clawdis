@@ -16,6 +16,15 @@ import WebKit
         #expect(scrollView.bounces == false)
     }
 
+    @Test @MainActor func navigateEnablesScrollForWebPages() {
+        let screen = ScreenController()
+        screen.navigate(to: "https://example.com")
+
+        let scrollView = screen.webView.scrollView
+        #expect(scrollView.isScrollEnabled == true)
+        #expect(scrollView.bounces == true)
+    }
+
     @Test @MainActor func navigateSlashShowsDefaultCanvas() {
         let screen = ScreenController()
         screen.navigate(to: "/")

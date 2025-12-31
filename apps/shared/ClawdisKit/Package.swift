@@ -12,10 +12,15 @@ let package = Package(
         .library(name: "ClawdisKit", targets: ["ClawdisKit"]),
         .library(name: "ClawdisChatUI", targets: ["ClawdisChatUI"]),
     ],
+    dependencies: [
+        .package(path: "../../../../ElevenLabsKit"),
+    ],
     targets: [
         .target(
             name: "ClawdisKit",
-            dependencies: [],
+            dependencies: [
+                .product(name: "ElevenLabsKit", package: "ElevenLabsKit"),
+            ],
             resources: [
                 .process("Resources"),
             ],

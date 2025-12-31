@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
@@ -31,7 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-fun ChatMarkdown(text: String) {
+fun ChatMarkdown(text: String, textColor: Color) {
   val blocks = remember(text) { splitMarkdown(text) }
   val inlineCodeBg = MaterialTheme.colorScheme.surfaceContainerLow
 
@@ -44,7 +45,7 @@ fun ChatMarkdown(text: String) {
           Text(
             text = parseInlineMarkdown(trimmed, inlineCodeBg = inlineCodeBg),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = textColor,
           )
         }
         is ChatMarkdownBlock.Code -> {

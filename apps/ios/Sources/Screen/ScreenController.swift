@@ -43,9 +43,7 @@ final class ScreenController {
         self.webView.scrollView.contentInset = .zero
         self.webView.scrollView.scrollIndicatorInsets = .zero
         self.webView.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
-        // Disable scroll to allow touch events to pass through to canvas
-        self.webView.scrollView.isScrollEnabled = false
-        self.webView.scrollView.bounces = false
+        self.applyScrollBehavior()
         self.webView.navigationDelegate = self.navigationDelegate
         self.navigationDelegate.controller = self
         a2uiActionHandler.controller = self
@@ -60,6 +58,7 @@ final class ScreenController {
 
     func reload() {
         let trimmed = self.urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.applyScrollBehavior()
         if trimmed.isEmpty {
             guard let url = Self.canvasScaffoldURL else { return }
             self.errorText = nil
@@ -248,6 +247,15 @@ final class ScreenController {
             return true
         }
         return false
+    }
+
+    private func applyScrollBehavior() {
+        let trimmed = self.urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowScroll = !trimmed.isEmpty
+        let scrollView = self.webView.scrollView
+        // Default canvas needs raw touch events; external pages should scroll.
+        scrollView.isScrollEnabled = allowScroll
+        scrollView.bounces = allowScroll
     }
 
     private static func jsValue(_ value: String?) -> String {

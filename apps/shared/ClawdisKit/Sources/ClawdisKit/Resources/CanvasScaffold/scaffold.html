@@ -4,6 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Canvas</title>
+    <script>
+      (() => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const platform = (params.get('platform') || '').trim().toLowerCase();
+          if (platform) {
+            document.documentElement.dataset.platform = platform;
+            return;
+          }
+          if (/android/i.test(navigator.userAgent || '')) {
+            document.documentElement.dataset.platform = 'android';
+          }
+        } catch (_) {}
+      })();
+    </script>
     <style>
       :root { color-scheme: dark; }
       @media (prefers-reduced-motion: reduce) {
@@ -17,6 +32,13 @@
           radial-gradient(1000px 900px at 60% 90%, rgba(0, 209, 255, 0.10), rgba(0,0,0,0) 60%),
           #000;
         overflow: hidden;
+      }
+      :root[data-platform="android"] body {
+        background:
+          radial-gradient(1200px 900px at 15% 20%, rgba(42, 113, 255, 0.62), rgba(0,0,0,0) 55%),
+          radial-gradient(900px 700px at 85% 30%, rgba(255, 0, 138, 0.52), rgba(0,0,0,0) 60%),
+          radial-gradient(1000px 900px at 60% 90%, rgba(0, 209, 255, 0.48), rgba(0,0,0,0) 60%),
+          #0b1328;
       }
       body::before {
         content:"";
@@ -35,6 +57,7 @@
         pointer-events: none;
         animation: clawdis-grid-drift 140s ease-in-out infinite alternate;
       }
+      :root[data-platform="android"] body::before { opacity: 0.80; }
       body::after {
         content:"";
         position: fixed;
@@ -52,6 +75,7 @@
         pointer-events: none;
         animation: clawdis-glow-drift 110s ease-in-out infinite alternate;
       }
+      :root[data-platform="android"] body::after { opacity: 0.85; }
       @supports (mix-blend-mode: screen) {
         body::after { mix-blend-mode: screen; }
       }
@@ -76,6 +100,13 @@
         height:100vh;
         touch-action: none;
         z-index: 1;
+      }
+      :root[data-platform="android"] #clawdis-canvas {
+        background:
+          radial-gradient(1100px 800px at 20% 15%, rgba(42, 113, 255, 0.78), rgba(0,0,0,0) 58%),
+          radial-gradient(900px 650px at 82% 28%, rgba(255, 0, 138, 0.66), rgba(0,0,0,0) 62%),
+          radial-gradient(1000px 900px at 60% 88%, rgba(0, 209, 255, 0.58), rgba(0,0,0,0) 62%),
+          #141c33;
       }
       #clawdis-status {
         position: fixed;

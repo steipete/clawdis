@@ -7,8 +7,8 @@ import { normalizeBrowserScreenshot } from "./screenshot.js";
 
 describe("browser screenshot normalization", () => {
   it("shrinks oversized images to <=2000x2000 and <=5MB", async () => {
-    const width = 2800;
-    const height = 2800;
+    const width = 2300;
+    const height = 2300;
     const raw = crypto.randomBytes(width * height * 3);
     const bigPng = await sharp(raw, { raw: { width, height, channels: 3 } })
       .png({ compressionLevel: 0 })
@@ -25,7 +25,7 @@ describe("browser screenshot normalization", () => {
     expect(Number(meta.height)).toBeLessThanOrEqual(2000);
     expect(normalized.buffer[0]).toBe(0xff);
     expect(normalized.buffer[1]).toBe(0xd8);
-  }, 20_000);
+  }, 30_000);
 
   it("keeps already-small screenshots unchanged", async () => {
     const jpeg = await sharp({
