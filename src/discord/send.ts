@@ -116,7 +116,9 @@ async function sendDiscordText(
   if (!text.trim()) {
     throw new Error("Message must be non-empty for Discord sends");
   }
-  const messageReference = replyTo ? { message_id: replyTo } : undefined;
+  const messageReference = replyTo
+    ? { message_id: replyTo, fail_if_not_exists: false }
+    : undefined;
   if (text.length <= DISCORD_TEXT_LIMIT) {
     const res = (await rest.post(Routes.channelMessages(channelId), {
       body: { content: text, message_reference: messageReference },
@@ -152,7 +154,9 @@ async function sendDiscordMedia(
   const media = await loadWebMedia(mediaUrl);
   const caption =
     text.length > DISCORD_TEXT_LIMIT ? text.slice(0, DISCORD_TEXT_LIMIT) : text;
-  const messageReference = replyTo ? { message_id: replyTo } : undefined;
+  const messageReference = replyTo
+    ? { message_id: replyTo, fail_if_not_exists: false }
+    : undefined;
   const res = (await rest.post(Routes.channelMessages(channelId), {
     body: {
       content: caption || undefined,

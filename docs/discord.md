@@ -36,6 +36,7 @@ Note: Guild context `[from:]` lines include `author.tag` + `id` to make ping-rea
 ## Capabilities & limits
 - DMs and guild text channels (threads are treated as separate channels; voice not supported).
 - Typing indicators sent best-effort; message chunking honors Discord’s 2k character limit.
+- Auto-replies are sent as native replies to the triggering message (first chunk only).
 - File uploads supported up to the configured `discord.mediaMaxMb` (default 8 MB).
 - Mention-gated guild replies by default to avoid noisy bots.
 

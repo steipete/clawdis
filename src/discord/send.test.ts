@@ -82,4 +82,56 @@ describe("sendMessageDiscord", () => {
       }),
     );
   });
+
+  it("includes message_reference when replying", async () => {
+    const { rest, postMock } = makeRest();
+    postMock.mockResolvedValue({ id: "msg1", channel_id: "789" });
+    await sendMessageDiscord("channel:789", "hello", {
+      rest,
+      token: "t",
+      replyTo: "orig-123",
+    });
+    const body = postMock.mock.calls[0]?.[1]?.body;
+    expect(body?.message_reference).toEqual({
+      message_id: "orig-123",
+      fail_if_not_exists: false,
+    });
+  });
+
+  it("replies only on the first chunk", async () => {
+    const { rest, postMock } = makeRest();
+    postMock.mockResolvedValue({ id: "msg1", channel_id: "789" });
+    await sendMessageDiscord("channel:789", "a".repeat(2001), {
+      rest,
+      token: "t",
+      replyTo: "orig-123",
+    });
+    expect(postMock).toHaveBeenCalledTimes(2);
+    const firstBody = postMock.mock.calls[0]?.[1]?.body;
+    const secondBody = postMock.mock.calls[1]?.[1]?.body;
+    expect(firstBody?.message_reference).toEqual({
+      message_id: "orig-123",
+      fail_if_not_exists: false,
+    });
+    expect(secondBody?.message_reference).toBeUndefined();
+  });
+
+  it("replies only on the first media send", async () => {
+    const { rest, postMock } = makeRest();
+    postMock.mockResolvedValue({ id: "msg1", channel_id: "789" });
+    await sendMessageDiscord("channel:789", "b".repeat(2001), {
+      rest,
+      token: "t",
+      mediaUrl: "file:///tmp/photo.jpg",
+      replyTo: "orig-123",
+    });
+    expect(postMock).toHaveBeenCalledTimes(2);
+    const firstBody = postMock.mock.calls[0]?.[1]?.body;
+    const secondBody = postMock.mock.calls[1]?.[1]?.body;
+    expect(firstBody?.message_reference).toEqual({
+      message_id: "orig-123",
+      fail_if_not_exists: false,
+    });
+    expect(secondBody?.message_reference).toBeUndefined();
+  });
 });
