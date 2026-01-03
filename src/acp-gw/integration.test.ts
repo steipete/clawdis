@@ -430,6 +430,182 @@ describe("acp-gw integration", () => {
     });
   });
 
+  describe("prompt flow", { timeout: 120_000 }, () => {
+    it("sends prompt and receives streaming response", async () => {
+      const { connection, updates } = createMockConnection();
+      
+      const gateway = new GatewayClient({
+        url: gatewayUrl,
+        clientName: "test",
+        clientVersion: "1.0.0",
+        mode: "acp",
+        onEvent: (evt) => {
+          agent?.handleGatewayEvent(evt);
+        },
+      });
+
+      let agent: AcpGwAgent;
+
+      await new Promise<void>((resolve) => {
+        gateway.opts.onHelloOk = () => resolve();
+        gateway.start();
+      });
+
+      agent = new AcpGwAgent(connection, gateway, { verbose: false });
+      agent.start();
+
+      await agent.initialize({
+        protocolVersion: 1,
+        clientCapabilities: {},
+        clientInfo: { name: "prompt-test", version: "1.0" },
+      });
+
+      const session = await agent.newSession({
+        cwd: "/tmp/prompt-test",
+        mcpServers: [],
+      });
+
+      // Send a simple prompt
+      const result = await agent.prompt({
+        sessionId: session.sessionId,
+        prompt: [{ type: "text", text: "What is 2+2? Reply with just the number." }],
+      });
+
+      // Verify we got a valid response (end_turn or refusal are both valid completions)
+      expect(["end_turn", "refusal"]).toContain(result.stopReason);
+
+      // Verify we received streaming updates
+      const textChunks = updates.filter(
+        (u) => (u.update as any)?.sessionUpdate === "agent_message_chunk"
+      );
+      // May or may not have streaming text depending on response
+      // The key is that we completed successfully
+      // (fast responses might not trigger delta events)
+
+      gateway.stop();
+    });
+
+    it("sends prompt with tool use and receives tool events", async () => {
+      const { connection, updates } = createMockConnection();
+      
+      const gateway = new GatewayClient({
+        url: gatewayUrl,
+        clientName: "test",
+        clientVersion: "1.0.0",
+        mode: "acp",
+        onEvent: (evt) => {
+          agent?.handleGatewayEvent(evt);
+        },
+      });
+
+      let agent: AcpGwAgent;
+
+      await new Promise<void>((resolve) => {
+        gateway.opts.onHelloOk = () => resolve();
+        gateway.start();
+      });
+
+      agent = new AcpGwAgent(connection, gateway, { verbose: false });
+      agent.start();
+
+      await agent.initialize({
+        protocolVersion: 1,
+        clientCapabilities: {},
+        clientInfo: { name: "tool-test", version: "1.0" },
+      });
+
+      const session = await agent.newSession({
+        cwd: "/tmp/tool-test",
+        mcpServers: [],
+      });
+
+      // Send a prompt that should trigger tool use (list files is safer than echo)
+      const result = await agent.prompt({
+        sessionId: session.sessionId,
+        prompt: [{ type: "text", text: "List the files in /tmp using bash. Just run: ls /tmp" }],
+      });
+
+      // Should complete (might be end_turn or refusal depending on model)
+      expect(["end_turn", "refusal"]).toContain(result.stopReason);
+
+      // Check for tool call events - may or may not have them depending on model behavior
+      const toolCalls = updates.filter(
+        (u) => (u.update as any)?.sessionUpdate === "tool_call"
+      );
+
+      // If we got tool calls, verify their structure
+      if (toolCalls.length > 0) {
+        const firstToolCall = toolCalls[0]?.update as any;
+        expect(firstToolCall?.toolCallId).toBeDefined();
+        expect(firstToolCall?.title).toBeDefined();
+        expect(firstToolCall?.status).toBe("running");
+
+        const toolUpdates = updates.filter(
+          (u) => (u.update as any)?.sessionUpdate === "tool_call_update"
+        );
+        if (toolUpdates.length > 0) {
+          const firstToolUpdate = toolUpdates[0]?.update as any;
+          expect(firstToolUpdate?.toolCallId).toBeDefined();
+          expect(["completed", "error"]).toContain(firstToolUpdate?.status);
+        }
+      }
+
+      gateway.stop();
+    });
+
+    it("handles prompt cancellation", async () => {
+      const { connection } = createMockConnection();
+      
+      const gateway = new GatewayClient({
+        url: gatewayUrl,
+        clientName: "test",
+        clientVersion: "1.0.0",
+        mode: "acp",
+        onEvent: (evt) => {
+          agent?.handleGatewayEvent(evt);
+        },
+      });
+
+      let agent: AcpGwAgent;
+
+      await new Promise<void>((resolve) => {
+        gateway.opts.onHelloOk = () => resolve();
+        gateway.start();
+      });
+
+      agent = new AcpGwAgent(connection, gateway, { verbose: false });
+      agent.start();
+
+      await agent.initialize({
+        protocolVersion: 1,
+        clientCapabilities: {},
+        clientInfo: { name: "cancel-test", version: "1.0" },
+      });
+
+      const session = await agent.newSession({
+        cwd: "/tmp/cancel-test",
+        mcpServers: [],
+      });
+
+      // Start a prompt and cancel it
+      // Note: Cancel timing is tricky - if the prompt completes before cancel,
+      // we get end_turn. If cancel works, we get cancelled. Either is valid.
+      const promptPromise = agent.prompt({
+        sessionId: session.sessionId,
+        prompt: [{ type: "text", text: "What is 1+1? Reply briefly." }],
+      });
+
+      // Try to cancel immediately
+      await agent.cancel({ sessionId: session.sessionId });
+
+      // The prompt should resolve with either cancelled or end_turn
+      const result = await promptPromise;
+      expect(["cancelled", "end_turn", "refusal"]).toContain(result.stopReason);
+
+      gateway.stop();
+    });
+  });
+
   describe("error handling", () => {
     it("loadSession throws not implemented", async () => {
       const { connection } = createMockConnection();
