@@ -85,6 +85,22 @@ export class AcpGwAgent implements Agent {
   }
 
   /**
+   * Handle Gateway disconnect — reject all pending prompts.
+   */
+  handleGatewayDisconnect(reason: string): void {
+    this.connected = false;
+    this.log(`gateway disconnected: ${reason}`);
+    
+    // Reject all pending prompts
+    for (const [sessionId, pending] of this.pendingPrompts) {
+      this.log(`rejecting pending prompt for session ${sessionId}`);
+      pending.reject(new Error(`Gateway disconnected: ${reason}`));
+      clearActiveRun(sessionId);
+    }
+    this.pendingPrompts.clear();
+  }
+
+  /**
    * Handle Gateway events, mapping to ACP session updates.
    */
   async handleGatewayEvent(evt: EventFrame): Promise<void> {

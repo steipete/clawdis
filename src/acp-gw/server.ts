@@ -43,6 +43,7 @@ export function serveAcpGw(opts: AcpGwOptions = {}): void {
     },
     onClose: (code, reason) => {
       log(`gateway disconnected: ${code} ${reason}`);
+      agent?.handleGatewayDisconnect(`${code}: ${reason}`);
     },
     onEvent: (evt) => {
       // Forward events to the agent for processing
