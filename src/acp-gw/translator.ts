@@ -85,6 +85,22 @@ export class AcpGwAgent implements Agent {
   }
 
   /**
+   * Update the Gateway client (used for reconnection).
+   */
+  updateGateway(gateway: GatewayClient): void {
+    this.gateway = gateway;
+    this.log("gateway client updated");
+  }
+
+  /**
+   * Handle Gateway reconnect.
+   */
+  handleGatewayReconnect(): void {
+    this.connected = true;
+    this.log("gateway reconnected");
+  }
+
+  /**
    * Handle Gateway disconnect — reject all pending prompts.
    */
   handleGatewayDisconnect(reason: string): void {

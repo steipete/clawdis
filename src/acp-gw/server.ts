@@ -18,6 +18,8 @@ import { AcpGwAgent } from "./translator.js";
 import type { AcpGwOptions } from "./types.js";
 
 const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789";
+const RECONNECT_DELAY_MS = 2000;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 /**
  * Start the ACP-GW server.
@@ -30,38 +32,74 @@ export function serveAcpGw(opts: AcpGwOptions = {}): void {
   const gatewayUrl = opts.gatewayUrl ?? DEFAULT_GATEWAY_URL;
   log(`connecting to gateway: ${gatewayUrl}`);
 
-  // Create Gateway client
-  const gateway = new GatewayClient({
-    url: gatewayUrl,
-    token: opts.gatewayToken,
-    password: opts.gatewayPassword,
-    clientName: "acp-gw",
-    clientVersion: "1.0.0",
-    mode: "acp",
-    onHelloOk: (hello) => {
-      log(`gateway connected: protocol=${hello.protocol}`);
-    },
-    onClose: (code, reason) => {
-      log(`gateway disconnected: ${code} ${reason}`);
-      agent?.handleGatewayDisconnect(`${code}: ${reason}`);
-    },
-    onEvent: (evt) => {
-      // Forward events to the agent for processing
-      void agent?.handleGatewayEvent(evt);
-    },
-  });
+  let agent: AcpGwAgent | null = null;
+  let gateway: GatewayClient | null = null;
+  let reconnectAttempts = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const createGatewayClient = (): GatewayClient => {
+    return new GatewayClient({
+      url: gatewayUrl,
+      token: opts.gatewayToken,
+      password: opts.gatewayPassword,
+      clientName: "acp-gw",
+      clientVersion: "1.0.0",
+      mode: "acp",
+      onHelloOk: (hello) => {
+        log(`gateway connected: protocol=${hello.protocol}`);
+        reconnectAttempts = 0; // Reset on successful connection
+        if (agent) {
+          agent.handleGatewayReconnect();
+        }
+      },
+      onClose: (code, reason) => {
+        log(`gateway disconnected: ${code} ${reason}`);
+        agent?.handleGatewayDisconnect(`${code}: ${reason}`);
+        
+        // Attempt reconnection for non-fatal closes
+        if (code !== 1000 && code !== 1001) {
+          scheduleReconnect();
+        }
+      },
+      onEvent: (evt) => {
+        void agent?.handleGatewayEvent(evt);
+      },
+    });
+  };
+
+  const scheduleReconnect = (): void => {
+    if (reconnectTimer) return;
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      log(`max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up`);
+      return;
+    }
+
+    reconnectAttempts++;
+    const delay = RECONNECT_DELAY_MS * reconnectAttempts;
+    log(`scheduling reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
+
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      log(`attempting reconnect...`);
+      gateway = createGatewayClient();
+      if (agent) {
+        agent.updateGateway(gateway);
+      }
+      gateway.start();
+    }, delay);
+  };
+
+  // Create initial Gateway client
+  gateway = createGatewayClient();
 
   // Create Web Streams from Node streams for the ACP SDK
   const input = Writable.toWeb(process.stdout);
   const output = Readable.toWeb(process.stdin) as ReadableStream<Uint8Array>;
   const stream = ndJsonStream(input, output);
 
-  // Create the agent (will be set after connection is established)
-  let agent: AcpGwAgent | null = null;
-
   // Create the ACP connection
   new AgentSideConnection((conn) => {
-    agent = new AcpGwAgent(conn, gateway, opts);
+    agent = new AcpGwAgent(conn, gateway!, opts);
     agent.start();
     return agent;
   }, stream);
@@ -91,6 +129,9 @@ function parseArgs(args: string[]): AcpGwOptions {
       opts.gatewayPassword = args[++i];
     } else if (arg === "--verbose" || arg === "-v") {
       opts.verbose = true;
+    } else if (arg === "--cwd" && args[i + 1]) {
+      // Ignored for compatibility (cwd comes from session/new)
+      i++;
     } else if (arg === "--help" || arg === "-h") {
       console.log(`Usage: clawd-acp-gw [options]
 
