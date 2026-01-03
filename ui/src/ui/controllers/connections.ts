@@ -292,6 +292,14 @@ export async function saveDiscordConfig(state: ConnectionsState) {
       const slug = String(guild.slug ?? "").trim();
       if (slug) entry.slug = slug;
       if (guild.requireMention) entry.requireMention = true;
+      if (
+        guild.reactionNotifications === "off" ||
+        guild.reactionNotifications === "all" ||
+        guild.reactionNotifications === "own" ||
+        guild.reactionNotifications === "allowlist"
+      ) {
+        entry.reactionNotifications = guild.reactionNotifications;
+      }
       const users = parseList(guild.users);
       if (users.length > 0) entry.users = users;
       const channels: Record<string, unknown> = {};

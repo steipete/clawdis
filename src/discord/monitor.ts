@@ -1,12 +1,20 @@
 import {
   ApplicationCommandOptionType,
+  type Attachment,
   ChannelType,
+  type ChatInputCommandInteraction,
   Client,
   type CommandInteractionOption,
   Events,
   GatewayIntentBits,
+  type Guild,
   type Message,
+  type MessageReaction,
+  type PartialMessage,
+  type PartialMessageReaction,
   Partials,
+  type PartialUser,
+  type User,
 } from "discord.js";
 
 import { chunkText, resolveTextChunkLimit } from "../auto-reply/chunk.js";
@@ -21,6 +29,7 @@ import type {
 import { loadConfig } from "../config/config.js";
 import { resolveStorePath, updateLastRoute } from "../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose, warn } from "../globals.js";
+import { enqueueSystemEvent } from "../infra/system-events.js";
 import { getChildLogger } from "../logging.js";
 import { detectMime } from "../media/mime.js";
 import { saveMediaBuffer } from "../media/store.js";
@@ -61,6 +70,7 @@ export type DiscordGuildEntryResolved = {
   id?: string;
   slug?: string;
   requireMention?: boolean;
+  reactionNotifications?: "off" | "own" | "all" | "allowlist";
   users?: Array<string | number>;
   channels?: Record<string, { allow?: boolean; requireMention?: boolean }>;
 };
@@ -149,10 +159,17 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMessageReactions,
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.DirectMessageReactions,
     ],
-    partials: [Partials.Channel],
+    partials: [
+      Partials.Channel,
+      Partials.Message,
+      Partials.Reaction,
+      Partials.User,
+    ],
   });
 
   const logger = getChildLogger({ module: "discord-auto-reply" });
@@ -503,6 +520,99 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     }
   });
 
+  const handleReactionEvent = async (
+    reaction: MessageReaction | PartialMessageReaction,
+    user: User | PartialUser,
+    action: "added" | "removed",
+  ) => {
+    try {
+      if (!user || user.bot) return;
+      const resolvedReaction = reaction.partial
+        ? await reaction.fetch()
+        : reaction;
+      const message = (resolvedReaction.message as Message | PartialMessage)
+        .partial
+        ? await resolvedReaction.message.fetch()
+        : resolvedReaction.message;
+      const guild = message.guild;
+      if (!guild) return;
+      const guildInfo = resolveDiscordGuildEntry({
+        guild,
+        guildEntries,
+      });
+      if (guildEntries && Object.keys(guildEntries).length > 0 && !guildInfo) {
+        return;
+      }
+      const channelName =
+        "name" in message.channel
+          ? (message.channel.name ?? undefined)
+          : undefined;
+      const channelSlug = channelName ? normalizeDiscordSlug(channelName) : "";
+      const channelConfig = resolveDiscordChannelConfig({
+        guildInfo,
+        channelId: message.channelId,
+        channelName,
+        channelSlug,
+      });
+      if (channelConfig?.allowed === false) return;
+
+      const botId = client.user?.id;
+      if (botId && user.id === botId) return;
+
+      const reactionMode = guildInfo?.reactionNotifications ?? "allowlist";
+      if (reactionMode === "off") return;
+      if (reactionMode === "own") {
+        const authorId = message.author?.id;
+        if (!botId || authorId !== botId) return;
+      }
+      if (reactionMode === "allowlist") {
+        const userAllow = guildInfo?.users;
+        if (!Array.isArray(userAllow) || userAllow.length === 0) return;
+        const users = normalizeDiscordAllowList(userAllow, [
+          "discord:",
+          "user:",
+        ]);
+        const userOk =
+          !!users &&
+          allowListMatches(users, {
+            id: user.id,
+            name: user.username,
+            tag: user.tag,
+          });
+        if (!userOk) return;
+      }
+
+      const emojiLabel = formatDiscordReactionEmoji(resolvedReaction);
+      const actorLabel = user.tag ?? user.username ?? user.id;
+      const guildSlug =
+        guildInfo?.slug ||
+        (guild.name ? normalizeDiscordSlug(guild.name) : guild.id);
+      const channelLabel = channelSlug
+        ? `#${channelSlug}`
+        : channelName
+          ? `#${normalizeDiscordSlug(channelName)}`
+          : `#${message.channelId}`;
+      const authorLabel = message.author?.tag ?? message.author?.username;
+      const baseText = `Discord reaction ${action}: ${emojiLabel} by ${actorLabel} on ${guildSlug} ${channelLabel} msg ${message.id}`;
+      const text = authorLabel ? `${baseText} from ${authorLabel}` : baseText;
+      enqueueSystemEvent(text, {
+        contextKey: `discord:reaction:${action}:${message.id}:${user.id}:${emojiLabel}`,
+      });
+    } catch (err) {
+      runtime.error?.(
+        danger(`discord reaction handler failed: ${String(err)}`),
+      );
+    }
+  };
+
+  client.on(Events.MessageReactionAdd, async (reaction, user) => {
+    await handleReactionEvent(reaction, user, "added");
+  });
+
+  client.on(Events.MessageReactionRemove, async (reaction, user) => {
+    await handleReactionEvent(reaction, user, "removed");
+  });
+
   client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (!slashCommand.enabled) return;
@@ -698,7 +808,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
 }
 
 async function resolveMedia(
-  message: import("discord.js").Message,
+  message: Message,
   maxBytes: number,
 ): Promise<DiscordMediaInfo | null> {
   const attachment = message.attachments.first();
@@ -723,7 +833,7 @@ async function resolveMedia(
   };
 }
 
-function inferPlaceholder(attachment: import("discord.js").Attachment): string {
+function inferPlaceholder(attachment: Attachment): string {
   const mime = attachment.contentType ?? "";
   if (mime.startsWith("image/")) return "<media:image>";
   if (mime.startsWith("video/")) return "<media:video>";
@@ -768,15 +878,28 @@ async function resolveReplyContext(message: Message): Promise<string | null> {
   }
 }
 
-function buildDirectLabel(message: import("discord.js").Message) {
+function buildDirectLabel(message: Message) {
   const username = message.author.tag;
   return `${username} id:${message.author.id}`;
 }
 
-function buildGuildLabel(message: import("discord.js").Message) {
+function buildGuildLabel(message: Message) {
   const channelName =
     "name" in message.channel ? message.channel.name : message.channelId;
   return `${message.guild?.name ?? "Guild"} #${channelName} id:${message.channelId}`;
+}
+
+function formatDiscordReactionEmoji(
+  reaction: MessageReaction | PartialMessageReaction,
+) {
+  if (typeof reaction.emoji.toString === "function") {
+    const rendered = reaction.emoji.toString();
+    if (rendered && rendered !== "[object Object]") return rendered;
+  }
+  if (reaction.emoji.id && reaction.emoji.name) {
+    return `${reaction.emoji.name}:${reaction.emoji.id}`;
+  }
+  return reaction.emoji.name ?? "emoji";
 }
 
 export function normalizeDiscordAllowList(
@@ -863,7 +986,7 @@ export function allowListMatches(
 }
 
 export function resolveDiscordGuildEntry(params: {
-  guild: import("discord.js").Guild | null;
+  guild: Guild | null;
   guildEntries: Record<string, DiscordGuildEntryResolved> | undefined;
 }): DiscordGuildEntryResolved | null {
   const { guild, guildEntries } = params;
@@ -878,6 +1001,7 @@ export function resolveDiscordGuildEntry(params: {
       id: guildId,
       slug: direct.slug ?? guildSlug,
       requireMention: direct.requireMention,
+      reactionNotifications: direct.reactionNotifications,
       users: direct.users,
       channels: direct.channels,
     };
@@ -888,6 +1012,7 @@ export function resolveDiscordGuildEntry(params: {
       id: guildId,
       slug: entry.slug ?? guildSlug,
       requireMention: entry.requireMention,
+      reactionNotifications: entry.reactionNotifications,
       users: entry.users,
       channels: entry.channels,
     };
@@ -902,6 +1027,7 @@ export function resolveDiscordGuildEntry(params: {
       id: guildId,
       slug: entry.slug ?? guildSlug,
       requireMention: entry.requireMention,
+      reactionNotifications: entry.reactionNotifications,
       users: entry.users,
       channels: entry.channels,
     };
@@ -912,6 +1038,7 @@ export function resolveDiscordGuildEntry(params: {
       id: guildId,
       slug: wildcard.slug ?? guildSlug,
       requireMention: wildcard.requireMention,
+      reactionNotifications: wildcard.reactionNotifications,
       users: wildcard.users,
       channels: wildcard.channels,
     };
@@ -1121,7 +1248,7 @@ async function deliverSlashReplies({
   textLimit,
 }: {
   replies: ReplyPayload[];
-  interaction: import("discord.js").ChatInputCommandInteraction;
+  interaction: ChatInputCommandInteraction;
   ephemeral: boolean;
   textLimit: number;
 }) {

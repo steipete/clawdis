@@ -197,6 +197,13 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
                   typeof entry.requireMention === "boolean"
                     ? entry.requireMention
                     : false,
+                reactionNotifications:
+                  entry.reactionNotifications === "off" ||
+                  entry.reactionNotifications === "all" ||
+                  entry.reactionNotifications === "own" ||
+                  entry.reactionNotifications === "allowlist"
+                    ? entry.reactionNotifications
+                    : "allowlist",
                 users: toList(entry.users),
                 channels,
               };

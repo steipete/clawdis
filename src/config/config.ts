@@ -203,9 +203,17 @@ export type DiscordGuildChannelConfig = {
   requireMention?: boolean;
 };
 
+export type DiscordReactionNotificationMode =
+  | "off"
+  | "own"
+  | "all"
+  | "allowlist";
+
 export type DiscordGuildEntry = {
   slug?: string;
   requireMention?: boolean;
+  /** Reaction notification mode (off|own|all|allowlist). Default: own. */
+  reactionNotifications?: DiscordReactionNotificationMode;
   users?: Array<string | number>;
   channels?: Record<string, DiscordGuildChannelConfig>;
 };
@@ -1153,6 +1161,9 @@ export const ClawdisSchema = z.object({
             .object({
               slug: z.string().optional(),
               requireMention: z.boolean().optional(),
+              reactionNotifications: z
+                .enum(["off", "own", "all", "allowlist"])
+                .optional(),
               users: z.array(z.union([z.string(), z.number()])).optional(),
               channels: z
                 .record(

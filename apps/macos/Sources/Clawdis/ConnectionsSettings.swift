@@ -516,6 +516,17 @@ struct ConnectionsSettings: View {
                                         .toggleStyle(.checkbox)
                                 }
                                 GridRow {
+                                    self.gridLabel("Reaction notifications")
+                                    Picker("", selection: $guild.reactionNotifications) {
+                                        Text("Off").tag("off")
+                                        Text("Own").tag("own")
+                                        Text("All").tag("all")
+                                        Text("Allowlist").tag("allowlist")
+                                    }
+                                    .labelsHidden()
+                                    .pickerStyle(.segmented)
+                                }
+                                GridRow {
                                     self.gridLabel("Users allowlist")
                                     TextField("123456789, username#1234", text: $guild.users)
                                         .textFieldStyle(.roundedBorder)

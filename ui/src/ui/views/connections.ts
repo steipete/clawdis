@@ -646,6 +646,26 @@ function renderProvider(
                           </select>
                         </label>
                         <label class="field">
+                          <span>Reaction notifications</span>
+                          <select
+                            .value=${guild.reactionNotifications}
+                            @change=${(e: Event) => {
+                              const next = [...props.discordForm.guilds];
+                              next[guildIndex] = {
+                                ...next[guildIndex],
+                                reactionNotifications: (e.target as HTMLSelectElement)
+                                  .value as "off" | "own" | "all",
+                              };
+                              props.onDiscordChange({ guilds: next });
+                            }}
+                          >
+                            <option value="off">Off</option>
+                            <option value="own">Own</option>
+                            <option value="all">All</option>
+                            <option value="allowlist">Allowlist</option>
+                          </select>
+                        </label>
+                        <label class="field">
                           <span>Users allowlist</span>
                           <input
                             .value=${guild.users}
@@ -812,6 +832,7 @@ function renderProvider(
                         key: "",
                         slug: "",
                         requireMention: false,
+                        reactionNotifications: "allowlist",
                         users: "",
                         channels: [],
                       },

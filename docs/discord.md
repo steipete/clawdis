@@ -86,6 +86,7 @@ Note: Guild context `[from:]` lines include `author.tag` + `id` to make ping-rea
       "123456789012345678": {
         slug: "friends-of-clawd",
         requireMention: false,
+        reactionNotifications: "allowlist",
         users: ["987654321098765432", "steipete"],
         channels: {
           general: { allow: true },
@@ -107,6 +108,7 @@ Note: Guild context `[from:]` lines include `author.tag` + `id` to make ping-rea
 - `guilds.<id>.users`: optional per-guild user allowlist (ids or names).
 - `guilds.<id>.channels`: channel rules (keys are channel slugs or ids).
 - `guilds.<id>.requireMention`: per-guild mention requirement (overridable per channel).
+- `guilds.<id>.reactionNotifications`: reaction system event mode (`off`, `own`, `all`, `allowlist`).
 - `slashCommand`: optional config for user-installed slash commands (ephemeral responses).
 - `mediaMaxMb`: clamp inbound media saved to disk.
 - `historyLimit`: number of recent guild messages to include as context when replying to a mention (default 20, `0` disables).
@@ -116,6 +118,8 @@ Note: Guild context `[from:]` lines include `author.tag` + `id` to make ping-rea
   - `memberInfo`, `roleInfo`, `channelInfo`, `voiceStatus`, `events`
   - `roles` (role add/remove, default `false`)
   - `moderation` (timeout/kick/ban, default `false`)
+
+Reaction notifications use `guilds.<id>.reactionNotifications`; `allowlist` checks `guilds.<id>.users`, while `all` ignores that allowlist.
 
 ### Tool action defaults
 

@@ -13,6 +13,7 @@
 - Onboarding: shared wizard engine powering CLI + macOS via gateway wizard RPC.
 - Config: expose schema + UI hints for generic config forms (Web UI + future clients).
 - Skills: add blogwatcher skill for RSS/Atom monitoring — thanks @Hyaxia.
+- Discord: emit system events for reaction add/remove with per-guild reaction notifications (off|own|all|allowlist) — thanks @thewilloftheshadow.
 
 ### Fixes
 - Auto-reply: drop final payloads when block streaming to avoid duplicate Discord sends.

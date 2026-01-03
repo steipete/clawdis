@@ -266,6 +266,7 @@ Configure the Discord bot by setting the bot token and optional gating:
       "123456789012345678": {               // guild id (preferred) or slug
         slug: "friends-of-clawd",
         requireMention: false,              // per-guild default
+        reactionNotifications: "allowlist", // off | own | all | allowlist
         users: ["987654321098765432"],      // optional per-guild user allowlist
         channels: {
           general: { allow: true },

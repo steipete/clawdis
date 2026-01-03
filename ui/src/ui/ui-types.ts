@@ -31,6 +31,7 @@ export type DiscordGuildForm = {
   key: string;
   slug: string;
   requireMention: boolean;
+  reactionNotifications: "off" | "own" | "all" | "allowlist";
   users: string;
   channels: DiscordGuildChannelForm[];
 };

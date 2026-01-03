@@ -162,6 +162,7 @@ struct DiscordGuildForm: Identifiable {
     var key: String
     var slug: String
     var requireMention: Bool
+    var reactionNotifications: String
     var users: String
     var channels: [DiscordGuildChannelForm]
 
@@ -169,12 +170,14 @@ struct DiscordGuildForm: Identifiable {
         key: String = "",
         slug: String = "",
         requireMention: Bool = false,
+        reactionNotifications: String = "allowlist",
         users: String = "",
         channels: [DiscordGuildChannelForm] = []
     ) {
         self.key = key
         self.slug = slug
         self.requireMention = requireMention
+        self.reactionNotifications = reactionNotifications
         self.users = users
         self.channels = channels
     }
@@ -491,6 +494,10 @@ final class ConnectionsStore {
                         let entry = value.dictionaryValue ?? [:]
                         let slug = entry["slug"]?.stringValue ?? ""
                         let requireMention = entry["requireMention"]?.boolValue ?? false
+                        let reactionModeRaw = entry["reactionNotifications"]?.stringValue ?? ""
+                        let reactionNotifications = ["off", "own", "all", "allowlist"].contains(reactionModeRaw)
+                            ? reactionModeRaw
+                            : "allowlist"
                         let users = entry["users"]?.arrayValue?
                             .compactMap { item -> String? in
                                 if let str = item.stringValue { return str }
@@ -518,6 +525,7 @@ final class ConnectionsStore {
                             key: key,
                             slug: slug,
                             requireMention: requireMention,
+                            reactionNotifications: reactionNotifications,
                             users: users,
                             channels: channels)
                     }
@@ -794,6 +802,9 @@ final class ConnectionsStore {
             let slug = entry.slug.trimmingCharacters(in: .whitespacesAndNewlines)
             if !slug.isEmpty { payload["slug"] = slug }
             if entry.requireMention { payload["requireMention"] = true }
+            if ["off", "own", "all", "allowlist"].contains(entry.reactionNotifications) {
+                payload["reactionNotifications"] = entry.reactionNotifications
+            }
             let users = entry.users
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
