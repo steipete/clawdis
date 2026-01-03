@@ -525,6 +525,39 @@ async function refreshHealthSnapshot(_opts?: { probe?: boolean }) {
   return healthRefresh;
 }
 
+/**
+ * Deep merge two config objects. Values from `target` override `base`.
+ * Preserves nested structures and arrays are replaced.
+ */
+export function deepMergeConfig(
+  base: Record<string, unknown>,
+  target: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, targetValue] of Object.entries(target)) {
+    const baseValue = result[key];
+    if (
+      baseValue !== undefined &&
+      typeof baseValue === "object" &&
+      !Array.isArray(baseValue) &&
+      baseValue !== null &&
+      targetValue !== null &&
+      typeof targetValue === "object" &&
+      !Array.isArray(targetValue)
+    ) {
+      // Both are objects - merge recursively
+      result[key] = deepMergeConfig(
+        baseValue as Record<string, unknown>,
+        targetValue as Record<string, unknown>,
+      );
+    } else {
+      // Replace with target value
+      result[key] = targetValue;
+    }
+  }
+  return result;
+}
+
 export async function startGatewayServer(
   port = 18789,
   opts: GatewayServerOptions = {},
@@ -536,20 +569,28 @@ export async function startGatewayServer(
         "Legacy config entries detected while running in Nix mode. Update your Nix config to the latest schema and restart.",
       );
     }
-    const { config: migrated, changes } = migrateLegacyConfig(
-      configSnapshot.parsed,
-    );
-    if (!migrated) {
-      throw new Error(
-        'Legacy config entries detected but auto-migration failed. Run "clawdis doctor" to migrate.',
+    // Only auto-migrate/write on first run (config file doesn't exist)
+    // Don't overwrite existing user config on startup
+    if (!configSnapshot.exists) {
+      const { config: migrated, changes } = migrateLegacyConfig(
+        configSnapshot.parsed,
       );
-    }
-    await writeConfigFile(migrated);
-    if (changes.length > 0) {
-      log.info(
-        `gateway: migrated legacy config entries:\n${changes
-          .map((entry) => `- ${entry}`)
-          .join("\n")}`,
+      if (!migrated) {
+        throw new Error(
+          'Legacy config entries detected but auto-migration failed. Run "clawdis doctor" to migrate.',
+        );
+      }
+      await writeConfigFile(migrated);
+      if (changes.length > 0) {
+        log.info(
+          `gateway: migrated legacy config entries:\n${changes
+            .map((entry) => `- ${entry}`)
+            .join("\n")}`,
+        );
+      }
+    } else {
+      log.warn(
+        `gateway: legacy config format detected. Run "clawdis doctor" to migrate. Issues:\n${configSnapshot.legacyIssues.map((i) => `- ${i.path}: ${i.message}`).join("\n")}`,
       );
     }
   }
@@ -1278,7 +1319,15 @@ export async function startGatewayServer(
               },
             };
           }
-          const validated = validateConfigObject(parsedRes.parsed);
+          // Deep merge with existing config to preserve fields not in the new config
+          const existingSnapshot = await readConfigFileSnapshot();
+          const merged = deepMergeConfig(
+            existingSnapshot.parsed as Record<string, unknown>,
+            typeof parsedRes.parsed === "object" && parsedRes.parsed !== null
+              ? (parsedRes.parsed as Record<string, unknown>)
+              : {},
+          ) as Record<string, unknown>;
+          const validated = validateConfigObject(merged);
           if (!validated.ok) {
             return {
               ok: false,
@@ -3799,7 +3848,15 @@ export async function startGatewayServer(
                 );
                 break;
               }
-              const validated = validateConfigObject(parsedRes.parsed);
+              // Deep merge with existing config to preserve fields not in the new config
+              const existingSnapshot = await readConfigFileSnapshot();
+              const merged = deepMergeConfig(
+                existingSnapshot.parsed as Record<string, unknown>,
+                typeof parsedRes.parsed === "object" && parsedRes.parsed !== null
+                  ? (parsedRes.parsed as Record<string, unknown>)
+                  : {},
+              ) as Record<string, unknown>;
+              const validated = validateConfigObject(merged);
               if (!validated.ok) {
                 respond(
                   false,
