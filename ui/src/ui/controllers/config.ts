@@ -6,11 +6,14 @@ import type {
 } from "../types";
 import {
   defaultDiscordActions,
+  defaultSlackActions,
   type DiscordActionForm,
   type DiscordForm,
   type DiscordGuildChannelForm,
   type DiscordGuildForm,
   type IMessageForm,
+  type SlackChannelForm,
+  type SlackForm,
   type SignalForm,
   type TelegramForm,
 } from "../ui-types";
@@ -34,10 +37,12 @@ export type ConfigState = {
   lastError: string | null;
   telegramForm: TelegramForm;
   discordForm: DiscordForm;
+  slackForm: SlackForm;
   signalForm: SignalForm;
   imessageForm: IMessageForm;
   telegramConfigStatus: string | null;
   discordConfigStatus: string | null;
+  slackConfigStatus: string | null;
   signalConfigStatus: string | null;
   imessageConfigStatus: string | null;
 };
@@ -95,6 +100,7 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
   const config = snapshot.config ?? {};
   const telegram = (config.telegram ?? {}) as Record<string, unknown>;
   const discord = (config.discord ?? {}) as Record<string, unknown>;
+  const slack = (config.slack ?? {}) as Record<string, unknown>;
   const signal = (config.signal ?? {}) as Record<string, unknown>;
   const imessage = (config.imessage ?? {}) as Record<string, unknown>;
   const toList = (value: unknown) =>
@@ -233,6 +239,104 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
       typeof slash.sessionPrefix === "string" ? slash.sessionPrefix : "",
     slashEphemeral:
       typeof slash.ephemeral === "boolean" ? slash.ephemeral : true,
+  };
+
+  const slackDm = (slack.dm ?? {}) as Record<string, unknown>;
+  const slackChannels = slack.channels;
+  const slackSlash = (slack.slashCommand ?? {}) as Record<string, unknown>;
+  const slackActions =
+    (slack.actions ?? {}) as Partial<Record<keyof typeof defaultSlackActions, unknown>>;
+  state.slackForm = {
+    enabled: typeof slack.enabled === "boolean" ? slack.enabled : true,
+    botToken: typeof slack.botToken === "string" ? slack.botToken : "",
+    appToken: typeof slack.appToken === "string" ? slack.appToken : "",
+    dmEnabled: typeof slackDm.enabled === "boolean" ? slackDm.enabled : true,
+    allowFrom: toList(slackDm.allowFrom),
+    groupEnabled:
+      typeof slackDm.groupEnabled === "boolean" ? slackDm.groupEnabled : false,
+    groupChannels: toList(slackDm.groupChannels),
+    mediaMaxMb:
+      typeof slack.mediaMaxMb === "number" ? String(slack.mediaMaxMb) : "",
+    textChunkLimit:
+      typeof slack.textChunkLimit === "number"
+        ? String(slack.textChunkLimit)
+        : "",
+    replyToMode:
+      slack.replyToMode === "first" || slack.replyToMode === "all"
+        ? slack.replyToMode
+        : "off",
+    reactionNotifications:
+      slack.reactionNotifications === "off" ||
+      slack.reactionNotifications === "all" ||
+      slack.reactionNotifications === "allowlist"
+        ? slack.reactionNotifications
+        : "own",
+    reactionAllowlist: toList(slack.reactionAllowlist),
+    slashEnabled:
+      typeof slackSlash.enabled === "boolean" ? slackSlash.enabled : false,
+    slashName: typeof slackSlash.name === "string" ? slackSlash.name : "",
+    slashSessionPrefix:
+      typeof slackSlash.sessionPrefix === "string"
+        ? slackSlash.sessionPrefix
+        : "",
+    slashEphemeral:
+      typeof slackSlash.ephemeral === "boolean" ? slackSlash.ephemeral : true,
+    actions: {
+      ...defaultSlackActions,
+      reactions:
+        typeof slackActions.reactions === "boolean"
+          ? slackActions.reactions
+          : defaultSlackActions.reactions,
+      messages:
+        typeof slackActions.messages === "boolean"
+          ? slackActions.messages
+          : defaultSlackActions.messages,
+      pins:
+        typeof slackActions.pins === "boolean"
+          ? slackActions.pins
+          : defaultSlackActions.pins,
+      search:
+        typeof slackActions.search === "boolean"
+          ? slackActions.search
+          : defaultSlackActions.search,
+      permissions:
+        typeof slackActions.permissions === "boolean"
+          ? slackActions.permissions
+          : defaultSlackActions.permissions,
+      memberInfo:
+        typeof slackActions.memberInfo === "boolean"
+          ? slackActions.memberInfo
+          : defaultSlackActions.memberInfo,
+      channelInfo:
+        typeof slackActions.channelInfo === "boolean"
+          ? slackActions.channelInfo
+          : defaultSlackActions.channelInfo,
+      emojiList:
+        typeof slackActions.emojiList === "boolean"
+          ? slackActions.emojiList
+          : defaultSlackActions.emojiList,
+    },
+    channels: Array.isArray(slackChannels)
+      ? []
+      : typeof slackChannels === "object" && slackChannels
+        ? Object.entries(slackChannels as Record<string, unknown>).map(
+            ([key, value]): SlackChannelForm => {
+              const entry =
+                value && typeof value === "object"
+                  ? (value as Record<string, unknown>)
+                  : {};
+              return {
+                key,
+                allow:
+                  typeof entry.allow === "boolean" ? entry.allow : true,
+                requireMention:
+                  typeof entry.requireMention === "boolean"
+                    ? entry.requireMention
+                    : false,
+              };
+            },
+          )
+        : [],
   };
 
   state.signalForm = {

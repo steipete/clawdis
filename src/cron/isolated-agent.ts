@@ -64,6 +64,7 @@ function resolveDeliveryTarget(
       | "whatsapp"
       | "telegram"
       | "discord"
+      | "slack"
       | "signal"
       | "imessage";
     to?: string;
@@ -92,6 +93,7 @@ function resolveDeliveryTarget(
       requestedChannel === "whatsapp" ||
       requestedChannel === "telegram" ||
       requestedChannel === "discord" ||
+      requestedChannel === "slack" ||
       requestedChannel === "signal" ||
       requestedChannel === "imessage"
     ) {
@@ -437,6 +439,50 @@ export async function runCronIsolatedAgentTurn(params: {
               first = false;
               await params.deps.sendMessageDiscord(discordTarget, caption, {
                 token: process.env.DISCORD_BOT_TOKEN,
+                mediaUrl: url,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        if (!bestEffortDeliver)
+          return { status: "error", summary, error: String(err) };
+        return { status: "ok", summary };
+      }
+    } else if (resolvedDelivery.channel === "slack") {
+      if (!resolvedDelivery.to) {
+        if (!bestEffortDeliver)
+          return {
+            status: "error",
+            summary,
+            error:
+              "Cron delivery to Slack requires --channel slack and --to <channelId|user:ID>",
+          };
+        return {
+          status: "skipped",
+          summary: "Delivery skipped (no Slack destination).",
+        };
+      }
+      const slackTarget = resolvedDelivery.to;
+      try {
+        for (const payload of payloads) {
+          const mediaList =
+            payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
+          if (mediaList.length === 0) {
+            await params.deps.sendMessageSlack(
+              slackTarget,
+              payload.text ?? "",
+              {
+                token: process.env.SLACK_BOT_TOKEN,
+              },
+            );
+          } else {
+            let first = true;
+            for (const url of mediaList) {
+              const caption = first ? (payload.text ?? "") : "";
+              first = false;
+              await params.deps.sendMessageSlack(slackTarget, caption, {
+                token: process.env.SLACK_BOT_TOKEN,
                 mediaUrl: url,
               });
             }

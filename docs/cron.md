@@ -75,7 +75,7 @@ Each job is a JSON object with stable keys (unknown keys ignored for forward com
   - For `sessionTarget:"main"`, `wakeMode` controls whether we trigger the heartbeat immediately or just enqueue and wait.
 - `payload` (one of)
   - `{"kind":"systemEvent","text":string}` (enqueue as `System:`)
-  - `{"kind":"agentTurn","message":string,"deliver"?:boolean,"channel"?: "last"|"whatsapp"|"telegram"|"discord"|"signal"|"imessage","to"?:string,"timeoutSeconds"?:number}`
+  - `{"kind":"agentTurn","message":string,"deliver"?:boolean,"channel"?: "last"|"whatsapp"|"telegram"|"discord"|"slack"|"signal"|"imessage","to"?:string,"timeoutSeconds"?:number}`
 - `isolation` (optional; only meaningful for isolated jobs)
   - `{"postToMainPrefix"?: string}`
 - `runtime` (optional)
@@ -264,7 +264,7 @@ Add a `cron` command group (all commands should also support `--json` where sens
     - `--wake now|next-heartbeat`
   - payload flags (choose one):
     - `--system-event "<text>"`
-    - `--message "<agent message>" [--deliver] [--channel last|whatsapp|telegram|discord|signal|imessage] [--to <dest>]`
+    - `--message "<agent message>" [--deliver] [--channel last|whatsapp|telegram|discord|slack|signal|imessage] [--to <dest>]`
 
 - `clawdis cron edit <id> ...` (patch-by-flags, non-interactive)
 - `clawdis cron rm <id>`

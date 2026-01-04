@@ -473,6 +473,7 @@ export async function agentCommand(
   const whatsappTarget = opts.to ? normalizeE164(opts.to) : allowFrom[0];
   const telegramTarget = opts.to?.trim() || undefined;
   const discordTarget = opts.to?.trim() || undefined;
+  const slackTarget = opts.to?.trim() || undefined;
   const signalTarget = opts.to?.trim() || undefined;
   const imessageTarget = opts.to?.trim() || undefined;
 
@@ -484,11 +485,13 @@ export async function agentCommand(
           ? whatsappTarget
           : deliveryProvider === "discord"
             ? discordTarget
-            : deliveryProvider === "signal"
-              ? signalTarget
-              : deliveryProvider === "imessage"
-                ? imessageTarget
-                : undefined;
+            : deliveryProvider === "slack"
+              ? slackTarget
+              : deliveryProvider === "signal"
+                ? signalTarget
+                : deliveryProvider === "imessage"
+                  ? imessageTarget
+                  : undefined;
     const message = `Delivery failed (${deliveryProvider}${deliveryTarget ? ` to ${deliveryTarget}` : ""}): ${String(err)}`;
     runtime.error?.(message);
     if (!runtime.error) runtime.log(message);
@@ -510,6 +513,13 @@ export async function agentCommand(
     if (deliveryProvider === "discord" && !discordTarget) {
       const err = new Error(
         "Delivering to Discord requires --to <channelId|user:ID|channel:ID>",
+      );
+      if (!bestEffortDeliver) throw err;
+      logDeliveryError(err);
+    }
+    if (deliveryProvider === "slack" && !slackTarget) {
+      const err = new Error(
+        "Delivering to Slack requires --to <channelId|user:ID|channel:ID>",
       );
       if (!bestEffortDeliver) throw err;
       logDeliveryError(err);
@@ -539,6 +549,7 @@ export async function agentCommand(
       deliveryProvider !== "whatsapp" &&
       deliveryProvider !== "telegram" &&
       deliveryProvider !== "discord" &&
+      deliveryProvider !== "slack" &&
       deliveryProvider !== "signal" &&
       deliveryProvider !== "imessage" &&
       deliveryProvider !== "webchat"
@@ -574,6 +585,7 @@ export async function agentCommand(
     deliveryProvider === "whatsapp" ||
     deliveryProvider === "telegram" ||
     deliveryProvider === "discord" ||
+    deliveryProvider === "slack" ||
     deliveryProvider === "signal" ||
     deliveryProvider === "imessage"
       ? resolveTextChunkLimit(cfg, deliveryProvider)
@@ -656,6 +668,29 @@ export async function agentCommand(
             first = false;
             await deps.sendMessageDiscord(discordTarget, caption, {
               token: process.env.DISCORD_BOT_TOKEN,
+              mediaUrl: url,
+            });
+          }
+        }
+      } catch (err) {
+        if (!bestEffortDeliver) throw err;
+        logDeliveryError(err);
+      }
+    }
+
+    if (deliveryProvider === "slack" && slackTarget) {
+      try {
+        if (media.length === 0) {
+          await deps.sendMessageSlack(slackTarget, text, {
+            token: process.env.SLACK_BOT_TOKEN,
+          });
+        } else {
+          let first = true;
+          for (const url of media) {
+            const caption = first ? text : "";
+            first = false;
+            await deps.sendMessageSlack(slackTarget, caption, {
+              token: process.env.SLACK_BOT_TOKEN,
               mediaUrl: url,
             });
           }

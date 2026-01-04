@@ -254,6 +254,15 @@ export async function statusCommand(
         : `Discord: failed (${health.discord.probe?.status ?? "unknown"})${health.discord.probe?.error ? ` - ${health.discord.probe.error}` : ""}`
       : info("Discord: not configured");
     runtime.log(discordLine);
+
+    const slackLine = health.slack.configured
+      ? health.slack.probe?.ok
+        ? info(
+            `Slack: ok${health.slack.probe.team?.name ? ` (${health.slack.probe.team.name})` : ""} (${health.slack.probe.elapsedMs}ms)`,
+          )
+        : `Slack: failed (${health.slack.probe?.status ?? "unknown"})${health.slack.probe?.error ? ` - ${health.slack.probe.error}` : ""}`
+      : info("Slack: not configured");
+    runtime.log(slackLine);
   } else {
     runtime.log(info("Provider probes: skipped (use --deep)"));
   }

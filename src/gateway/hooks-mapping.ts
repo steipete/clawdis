@@ -23,6 +23,7 @@ export type HookMappingResolved = {
     | "whatsapp"
     | "telegram"
     | "discord"
+    | "slack"
     | "signal"
     | "imessage";
   to?: string;
@@ -61,6 +62,7 @@ export type HookAction =
         | "whatsapp"
         | "telegram"
         | "discord"
+        | "slack"
         | "signal"
         | "imessage";
       to?: string;
@@ -99,7 +101,14 @@ type HookTransformResult = Partial<{
   name: string;
   sessionKey: string;
   deliver: boolean;
-  channel: "last" | "whatsapp" | "telegram" | "discord" | "signal" | "imessage";
+  channel:
+    | "last"
+    | "whatsapp"
+    | "telegram"
+    | "discord"
+    | "slack"
+    | "signal"
+    | "imessage";
   to: string;
   thinking: string;
   timeoutSeconds: number;

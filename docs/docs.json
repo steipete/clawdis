@@ -51,6 +51,7 @@
           "whatsapp",
           "telegram",
           "discord",
+          "slack",
           "imessage",
           "webhook",
           "gmail-pubsub"

@@ -38,7 +38,7 @@ Behavior:
 Row shape (JSON):
 - `key`: session key (string)
 - `kind`: `main | group | cron | hook | node | other`
-- `provider`: `whatsapp | telegram | discord | signal | imessage | webchat | internal | unknown`
+- `provider`: `whatsapp | telegram | discord | slack | signal | imessage | webchat | internal | unknown`
 - `displayName` (group display label if available)
 - `updatedAt` (ms)
 - `sessionId`

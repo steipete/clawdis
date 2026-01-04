@@ -18,4 +18,4 @@ read_when:
 - Output:
   - Default: prints text (and `MEDIA:<url>` lines) to stdout.
   - `--json`: prints structured payloads + meta.
-- Optional: `--deliver` sends the reply back to the selected provider (`whatsapp`, `telegram`, `discord`, `signal`, `imessage`).
+- Optional: `--deliver` sends the reply back to the selected provider (`whatsapp`, `telegram`, `discord`, `slack`, `signal`, `imessage`).

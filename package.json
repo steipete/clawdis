@@ -79,6 +79,8 @@
     "@mariozechner/pi-ai": "^0.32.3",
     "@mariozechner/pi-coding-agent": "^0.32.3",
     "@mariozechner/pi-tui": "^0.32.3",
+    "@slack/bolt": "^3.17.1",
+    "@slack/web-api": "^7.11.0",
     "@sinclair/typebox": "0.34.46",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "ajv": "^8.17.1",

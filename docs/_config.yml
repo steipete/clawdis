@@ -1,5 +1,5 @@
 title: "CLAWDIS Docs"
-description: "A TypeScript/Node gateway + macOS/iOS companions for WhatsApp (web) and Telegram (bot)."
+description: "A TypeScript/Node gateway + macOS/iOS companions for WhatsApp (web), Telegram (bot), Discord, and Slack."
 markdown: kramdown
 highlighter: rouge
 
@@ -40,6 +40,8 @@ nav:
     url: "/ios/connect.html"
   - title: "Telegram"
     url: "/telegram.html"
+  - title: "Slack"
+    url: "/slack.html"
   - title: "Security"
     url: "/security.html"
   - title: "Troubleshooting"

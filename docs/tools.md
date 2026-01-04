@@ -173,6 +173,12 @@ Notes:
 - Polls require 2–10 answers and default to 24 hours.
 - `reactions` returns per-emoji user lists (limited to 100 per reaction).
 - `discord.actions.*` gates Discord tool actions; `roles` + `moderation` default to `false`.
+
+### `slack`
+
+Use the Slack tool to react, manage pins, send/edit/delete, search, and fetch channel/member info.
+
+- `slack.actions.*` gates Slack tool actions; all action groups default to `true`.
 - `searchMessages` follows the Discord preview spec (limit max 25, channel/author filters accept arrays).
 - The tool is only exposed when the current surface is Discord.
 

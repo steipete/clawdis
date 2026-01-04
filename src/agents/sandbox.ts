@@ -107,6 +107,7 @@ const DEFAULT_TOOL_DENY = [
   "nodes",
   "cron",
   "discord",
+  "slack",
   "gateway",
 ];
 const DEFAULT_SANDBOX_BROWSER_IMAGE = "clawdis-sandbox-browser:bookworm-slim";

@@ -9,7 +9,7 @@ Updated: 2025-12-07
 
 Goal: make replies deterministic per channel while keeping one shared context for direct chats.
 
-- **Surfaces** (channel labels): `whatsapp`, `webchat`, `telegram`, `discord`, `imessage`, `voice`, etc. Add `Surface` to inbound `MsgContext` so templates/agents can log which channel a turn came from. Routing is fixed: replies go back to the origin surface; the model doesn’t choose.
+- **Surfaces** (channel labels): `whatsapp`, `webchat`, `telegram`, `discord`, `slack`, `imessage`, `voice`, etc. Add `Surface` to inbound `MsgContext` so templates/agents can log which channel a turn came from. Routing is fixed: replies go back to the origin surface; the model doesn’t choose.
 - **Reply context:** inbound replies include `ReplyToId`, `ReplyToBody`, and `ReplyToSender`, and the quoted context is appended to `Body` as a `[Replying to ...]` block.
 - **Canonical direct session:** All direct chats collapse into the single `main` session by default (no config needed). Groups stay `surface:group:<id>` (rooms: `surface:channel:<id>`), so they remain isolated.
 - **Session store:** Keys are resolved via `resolveSessionKey(scope, ctx, mainKey)`; the agent JSONL path lives under `~/.clawdis/sessions/<SessionId>.jsonl`.

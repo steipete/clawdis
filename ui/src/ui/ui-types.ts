@@ -60,6 +60,44 @@ export type DiscordActionForm = {
   moderation: boolean;
 };
 
+export type SlackChannelForm = {
+  key: string;
+  allow: boolean;
+  requireMention: boolean;
+};
+
+export type SlackActionForm = {
+  reactions: boolean;
+  messages: boolean;
+  pins: boolean;
+  search: boolean;
+  permissions: boolean;
+  memberInfo: boolean;
+  channelInfo: boolean;
+  emojiList: boolean;
+};
+
+export type SlackForm = {
+  enabled: boolean;
+  botToken: string;
+  appToken: string;
+  dmEnabled: boolean;
+  allowFrom: string;
+  groupEnabled: boolean;
+  groupChannels: string;
+  mediaMaxMb: string;
+  textChunkLimit: string;
+  replyToMode: "off" | "first" | "all";
+  reactionNotifications: "off" | "own" | "all" | "allowlist";
+  reactionAllowlist: string;
+  slashEnabled: boolean;
+  slashName: string;
+  slashSessionPrefix: string;
+  slashEphemeral: boolean;
+  actions: SlackActionForm;
+  channels: SlackChannelForm[];
+};
+
 export const defaultDiscordActions: DiscordActionForm = {
   reactions: true,
   stickers: true,
@@ -76,6 +114,17 @@ export const defaultDiscordActions: DiscordActionForm = {
   events: true,
   roles: false,
   moderation: false,
+};
+
+export const defaultSlackActions: SlackActionForm = {
+  reactions: true,
+  messages: true,
+  pins: true,
+  search: true,
+  permissions: true,
+  memberInfo: true,
+  channelInfo: true,
+  emojiList: true,
 };
 
 export type SignalForm = {
@@ -120,7 +169,14 @@ export type CronFormState = {
   payloadKind: "systemEvent" | "agentTurn";
   payloadText: string;
   deliver: boolean;
-  channel: "last" | "whatsapp" | "telegram";
+  channel:
+    | "last"
+    | "whatsapp"
+    | "telegram"
+    | "discord"
+    | "slack"
+    | "signal"
+    | "imessage";
   to: string;
   timeoutSeconds: string;
   postToMainPrefix: string;

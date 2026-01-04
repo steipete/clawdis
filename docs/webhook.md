@@ -70,7 +70,7 @@ Payload:
 - `sessionKey` optional (default random `hook:<uuid>`)
 - `wakeMode` optional: `now` | `next-heartbeat` (default `now`)
 - `deliver` optional (default `false`)
-- `channel` optional: `last` | `whatsapp` | `telegram`
+- `channel` optional: `last` | `whatsapp` | `telegram` | `discord` | `slack` | `signal` | `imessage`
 - `to` optional (channel-specific target)
 - `thinking` optional (override)
 - `timeoutSeconds` optional
