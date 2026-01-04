@@ -10,8 +10,32 @@ const asRecord = (value: unknown): Record<string, unknown> => {
 };
 
 describe("google-shared convertTools", () => {
+  it("adds type:object when properties/required exist but type is missing", () => {
+    const tools = [
+      {
+        name: "noType",
+        description: "Tool with properties but no type",
+        parameters: {
+          properties: {
+            action: { type: "string" },
+          },
+          required: ["action"],
+        },
+      },
+    ] as unknown as Tool[];
+
+    const converted = convertTools(tools);
+    const params = asRecord(
+      converted?.[0]?.functionDeclarations?.[0]?.parameters,
+    );
+
+    expect(params.type).toBe("object");
+    expect(params.properties).toBeDefined();
+    expect(params.required).toEqual(["action"]);
+  });
+
   it("strips unsupported JSON Schema keywords", () => {
-    const tools: Tool[] = [
+    const tools = [
       {
         name: "example",
         description: "Example tool",
@@ -40,7 +64,7 @@ describe("google-shared convertTools", () => {
           required: ["mode"],
         },
       },
-    ];
+    ] as unknown as Tool[];
 
     const converted = convertTools(tools);
     const params = asRecord(
@@ -61,7 +85,7 @@ describe("google-shared convertTools", () => {
   });
 
   it("keeps supported schema fields", () => {
-    const tools: Tool[] = [
+    const tools = [
       {
         name: "settings",
         description: "Settings tool",
@@ -83,7 +107,7 @@ describe("google-shared convertTools", () => {
           required: ["config"],
         },
       },
-    ];
+    ] as unknown as Tool[];
 
     const converted = convertTools(tools);
     const params = asRecord(
