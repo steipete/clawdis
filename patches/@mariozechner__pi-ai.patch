@@ -2,7 +2,7 @@ diff --git a/dist/providers/google-shared.js b/dist/providers/google-shared.js
 index ff9cbcfebfac6b4370d85dc838f5cacf2a60ed64..42096c82aec925b412258348a36ba4a7025b283b 100644
 --- a/dist/providers/google-shared.js
 +++ b/dist/providers/google-shared.js
-@@ -140,6 +140,72 @@ export function convertMessages(model, context) {
+@@ -140,6 +140,77 @@ export function convertMessages(model, context) {
      }
      return contents;
  }
@@ -70,12 +70,17 @@ index ff9cbcfebfac6b4370d85dc838f5cacf2a60ed64..42096c82aec925b412258348a36ba4a7
 +            sanitized[key] = value;
 +        }
 +    }
++    // Ensure type: "object" is present when properties or required exist
++    // Google API requires type to be set when these fields are present
++    if (('properties' in sanitized || 'required' in sanitized) && !('type' in sanitized)) {
++        sanitized.type = 'object';
++    }
 +    return sanitized;
 +}
  /**
   * Convert tools to Gemini function declarations format.
   */
-@@ -151,7 +216,7 @@ export function convertTools(tools) {
+@@ -151,7 +221,7 @@ export function convertTools(tools) {
              functionDeclarations: tools.map((tool) => ({
                  name: tool.name,
                  description: tool.description,

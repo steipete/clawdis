@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   '@mariozechner/pi-ai':
-    hash: 969db6f3f4cc91fec48124e1f5e515b386b1f1bed807769d0a80c28abadbaaae
+    hash: 0650cefc2297ddda92f03ac5d17d2325019a90b939b4b31000fb16979473673c
     path: patches/@mariozechner__pi-ai.patch
   '@mariozechner/pi-coding-agent@0.32.3':
     hash: d0d5ffa1bfda8a0f9d14a5e73a074014346d3edbdb2ffc91444d3be5119f5745
@@ -33,7 +33,7 @@ importers:
         version: 0.32.3(ws@8.18.3)(zod@4.3.4)
       '@mariozechner/pi-ai':
         specifier: ^0.32.3
-        version: 0.32.3(patch_hash=969db6f3f4cc91fec48124e1f5e515b386b1f1bed807769d0a80c28abadbaaae)(ws@8.18.3)(zod@4.3.4)
+        version: 0.32.3(patch_hash=0650cefc2297ddda92f03ac5d17d2325019a90b939b4b31000fb16979473673c)(ws@8.18.3)(zod@4.3.4)
       '@mariozechner/pi-coding-agent':
         specifier: ^0.32.3
         version: 0.32.3(patch_hash=d0d5ffa1bfda8a0f9d14a5e73a074014346d3edbdb2ffc91444d3be5119f5745)(ws@8.18.3)(zod@4.3.4)
@@ -2164,9 +2164,6 @@ packages:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
 
-  node-addon-api@7.1.1:
-    resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
-
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
@@ -3347,7 +3344,7 @@ snapshots:
 
   '@mariozechner/pi-agent-core@0.32.3(ws@8.18.3)(zod@4.3.4)':
     dependencies:
-      '@mariozechner/pi-ai': 0.32.3(patch_hash=969db6f3f4cc91fec48124e1f5e515b386b1f1bed807769d0a80c28abadbaaae)(ws@8.18.3)(zod@4.3.4)
+      '@mariozechner/pi-ai': 0.32.3(patch_hash=0650cefc2297ddda92f03ac5d17d2325019a90b939b4b31000fb16979473673c)(ws@8.18.3)(zod@4.3.4)
       '@mariozechner/pi-tui': 0.32.3
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -3357,7 +3354,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.32.3(patch_hash=969db6f3f4cc91fec48124e1f5e515b386b1f1bed807769d0a80c28abadbaaae)(ws@8.18.3)(zod@4.3.4)':
+  '@mariozechner/pi-ai@0.32.3(patch_hash=0650cefc2297ddda92f03ac5d17d2325019a90b939b4b31000fb16979473673c)(ws@8.18.3)(zod@4.3.4)':
     dependencies:
       '@anthropic-ai/sdk': 0.71.2(zod@4.3.4)
       '@google/genai': 1.34.0
@@ -3380,7 +3377,7 @@ snapshots:
   '@mariozechner/pi-coding-agent@0.32.3(patch_hash=d0d5ffa1bfda8a0f9d14a5e73a074014346d3edbdb2ffc91444d3be5119f5745)(ws@8.18.3)(zod@4.3.4)':
     dependencies:
       '@mariozechner/pi-agent-core': 0.32.3(ws@8.18.3)(zod@4.3.4)
-      '@mariozechner/pi-ai': 0.32.3(patch_hash=969db6f3f4cc91fec48124e1f5e515b386b1f1bed807769d0a80c28abadbaaae)(ws@8.18.3)(zod@4.3.4)
+      '@mariozechner/pi-ai': 0.32.3(patch_hash=0650cefc2297ddda92f03ac5d17d2325019a90b939b4b31000fb16979473673c)(ws@8.18.3)(zod@4.3.4)
       '@mariozechner/pi-tui': 0.32.3
       chalk: 5.6.2
       cli-highlight: 2.1.11
@@ -4813,8 +4810,6 @@ snapshots:
   nanoid@3.3.11: {}
 
   negotiator@1.0.0: {}
-
-  node-addon-api@7.1.1: {}
 
   node-domexception@1.0.0: {}
 
