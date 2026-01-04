@@ -6,6 +6,20 @@ import SwiftUI
 
 private let onboardingWizardLogger = Logger(subsystem: "com.clawdis", category: "onboarding.wizard")
 
+// MARK: - Swift 6 AnyCodable Bridging Helpers
+// These helpers bridge between ClawdisProtocol.AnyCodable and the local module
+// to avoid Swift 6 strict concurrency type conflicts.
+
+private typealias ProtocolAnyCodable = ClawdisProtocol.AnyCodable
+
+private func bridgeToProtocol(_ value: Any) -> ProtocolAnyCodable {
+    ProtocolAnyCodable(value)
+}
+
+private func bridgeDict(_ dict: [String: Any]) -> [String: ProtocolAnyCodable] {
+    dict.mapValues { ProtocolAnyCodable($0) }
+}
+
 @MainActor
 @Observable
 final class OnboardingWizardModel {
@@ -307,12 +321,12 @@ private struct WizardOptionItem: Identifiable {
 }
 
 private struct WizardOption {
-    let value: AnyCodable?
+    let value: ProtocolAnyCodable?
     let label: String
     let hint: String?
 }
 
-private func decodeWizardStep(_ raw: [String: AnyCodable]?) -> WizardStep? {
+private func decodeWizardStep(_ raw: [String: ProtocolAnyCodable]?) -> WizardStep? {
     guard let raw else { return nil }
     do {
         let data = try JSONEncoder().encode(raw)
@@ -323,7 +337,7 @@ private func decodeWizardStep(_ raw: [String: AnyCodable]?) -> WizardStep? {
     }
 }
 
-private func parseWizardOptions(_ raw: [[String: AnyCodable]]?) -> [WizardOption] {
+private func parseWizardOptions(_ raw: [[String: ProtocolAnyCodable]]?) -> [WizardOption] {
     guard let raw else { return [] }
     return raw.map { entry in
         let value = entry["value"]
@@ -337,7 +351,7 @@ private func wizardStepType(_ step: WizardStep) -> String {
     (step.type.value as? String) ?? ""
 }
 
-private func anyCodableString(_ value: AnyCodable?) -> String {
+private func anyCodableString(_ value: ProtocolAnyCodable?) -> String {
     switch value?.value {
     case let string as String:
         return string
@@ -352,11 +366,11 @@ private func anyCodableString(_ value: AnyCodable?) -> String {
     }
 }
 
-private func anyCodableStringValue(_ value: AnyCodable?) -> String? {
+private func anyCodableStringValue(_ value: ProtocolAnyCodable?) -> String? {
     value?.value as? String
 }
 
-private func anyCodableBool(_ value: AnyCodable?) -> Bool {
+private func anyCodableBool(_ value: ProtocolAnyCodable?) -> Bool {
     switch value?.value {
     case let bool as Bool:
         return bool
@@ -367,18 +381,18 @@ private func anyCodableBool(_ value: AnyCodable?) -> Bool {
     }
 }
 
-private func anyCodableArray(_ value: AnyCodable?) -> [AnyCodable] {
+private func anyCodableArray(_ value: ProtocolAnyCodable?) -> [ProtocolAnyCodable] {
     switch value?.value {
-    case let arr as [AnyCodable]:
+    case let arr as [ProtocolAnyCodable]:
         return arr
     case let arr as [Any]:
-        return arr.map { AnyCodable($0) }
+        return arr.map { ProtocolAnyCodable($0) }
     default:
         return []
     }
 }
 
-private func anyCodableEqual(_ lhs: AnyCodable?, _ rhs: AnyCodable?) -> Bool {
+private func anyCodableEqual(_ lhs: ProtocolAnyCodable?, _ rhs: ProtocolAnyCodable?) -> Bool {
     switch (lhs?.value, rhs?.value) {
     case let (l as String, r as String):
         return l == r

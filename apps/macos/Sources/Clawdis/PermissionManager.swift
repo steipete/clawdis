@@ -289,10 +289,14 @@ final class LocationPermissionRequester: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        guard let cont = self.continuation else { return }
-        self.continuation = nil
-        cont.resume(returning: manager.authorizationStatus)
+    // nonisolated for Swift 6 strict concurrency compatibility
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            guard let cont = self.continuation else { return }
+            self.continuation = nil
+            cont.resume(returning: status)
+        }
     }
 }
 

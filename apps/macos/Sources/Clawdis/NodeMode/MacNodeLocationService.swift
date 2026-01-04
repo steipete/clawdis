@@ -91,19 +91,26 @@ final class MacNodeLocationService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let cont = self.locationContinuation else { return }
-        self.locationContinuation = nil
-        if let latest = locations.last {
-            cont.resume(returning: latest)
-        } else {
-            cont.resume(throwing: Error.unavailable)
+    // MARK: - CLLocationManagerDelegate (nonisolated for Swift 6 compatibility)
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        Task { @MainActor in
+            guard let cont = self.locationContinuation else { return }
+            self.locationContinuation = nil
+            if let latest = locations.last {
+                cont.resume(returning: latest)
+            } else {
+                cont.resume(throwing: Error.unavailable)
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
-        guard let cont = self.locationContinuation else { return }
-        self.locationContinuation = nil
-        cont.resume(throwing: error)
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Swift.Error) {
+        let errorCopy = error // Capture error for Sendable compliance
+        Task { @MainActor in
+            guard let cont = self.locationContinuation else { return }
+            self.locationContinuation = nil
+            cont.resume(throwing: errorCopy)
+        }
     }
 }
