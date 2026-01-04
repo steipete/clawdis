@@ -30,8 +30,8 @@ message. If the reply is only `HEARTBEAT_OK`, it is dropped.
     heartbeat: {
       every: "30m",           // duration string: ms|s|m|h (0m disables)
       model: "anthropic/claude-opus-4-5",
-      target: "last",          // last | whatsapp | telegram | none
-      to: "+15551234567",      // optional override for whatsapp/telegram
+      target: "last",          // last | whatsapp | telegram | discord | slack | signal | imessage | none
+      to: "+15551234567",      // optional override for delivery target
       prompt: "HEARTBEAT"      // optional override
     }
   }
@@ -44,9 +44,9 @@ message. If the reply is only `HEARTBEAT_OK`, it is dropped.
 - `model`: optional model override for heartbeat runs (`provider/model`).
 - `target`: where heartbeat output is delivered.
   - `last` (default): send to the last used external channel.
-  - `whatsapp` / `telegram`: force the channel (optionally set `to`).
+  - `whatsapp` / `telegram` / `discord` / `slack` / `signal` / `imessage`: force the channel (optionally set `to`).
   - `none`: do not deliver externally; output stays in the session (WebChat-visible).
-- `to`: optional recipient override (E.164 for WhatsApp, chat id for Telegram).
+- `to`: optional recipient override (E.164 for WhatsApp, chat id for Telegram, `user:<id>` or `channel:<id>` for Discord/Slack).
 - `prompt`: optional override for the heartbeat body (default: `HEARTBEAT`).
 
 ## Behavior

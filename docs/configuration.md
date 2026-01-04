@@ -142,7 +142,7 @@ Group messages default to **require mention** (either metadata mention or regex 
 }
 ```
 
-Mention gating defaults live per provider (`whatsapp.groups`, `telegram.groups`, `imessage.groups`, `discord.guilds`).
+Mention gating defaults live per provider (`whatsapp.groups`, `telegram.groups`, `imessage.groups`, `discord.guilds`, `slack.channels`).
 
 To respond **only** to specific text triggers (ignoring native @-mentions):
 ```json5
@@ -177,6 +177,7 @@ Controls how inbound messages behave when an agent run is already active.
         whatsapp: "collect",
         telegram: "collect",
         discord: "collect",
+        slack: "collect",
         imessage: "collect",
         webchat: "collect"
       }
@@ -291,6 +292,71 @@ Reaction notification modes:
 - `own`: reactions on the bot's own messages (default).
 - `all`: all reactions on all messages.
 - `allowlist`: reactions from `guilds.<id>.users` on all messages (empty list disables).
+
+### `slack` (socket mode)
+
+Slack runs in Socket Mode and requires both a bot token and app token:
+
+```json5
+{
+  slack: {
+    enabled: true,
+    botToken: "xoxb-...",
+    appToken: "xapp-...",
+    dm: {
+      enabled: true,
+      allowFrom: ["U123", "U456", "*"],
+      groupEnabled: false,
+      groupChannels: ["G123"]
+    },
+    channels: {
+      C123: { allow: true, requireMention: true },
+      "#general": { allow: true, requireMention: false }
+    },
+    reactionNotifications: "own", // off | own | all | allowlist
+    reactionAllowlist: ["U123"],
+    actions: {
+      reactions: true,
+      messages: true,
+      pins: true,
+      search: true,
+      permissions: true,
+      memberInfo: true,
+      channelInfo: true,
+      emojiList: true
+    },
+    slashCommand: {
+      enabled: true,
+      name: "clawd",
+      sessionPrefix: "slack:slash",
+      ephemeral: true
+    },
+    replyToMode: "off",      // off | first | all
+    textChunkLimit: 4000,
+    mediaMaxMb: 20
+  }
+}
+```
+
+Clawdis starts Slack only when a `slack` config section exists and both tokens are set (unless `slack.enabled` is `false`). Provide `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` env vars if you prefer. Use `user:<id>` (DM) or `channel:<id>` when specifying delivery targets for cron/CLI commands.
+
+Reaction notification modes:
+- `off`: no reaction events.
+- `own`: reactions on the bot's own messages (default).
+- `all`: all reactions on all messages.
+- `allowlist`: reactions from `slack.reactionAllowlist` on all messages (empty list disables).
+
+Slack action groups (gate `slack` tool actions):
+| Action group | Default | Notes |
+| --- | --- | --- |
+| reactions | enabled | React + list reactions |
+| messages | enabled | Read/send/edit/delete |
+| pins | enabled | Pin/unpin/list |
+| search | enabled | Message search |
+| permissions | enabled | Channel permission snapshot |
+| memberInfo | enabled | Member info |
+| channelInfo | enabled | Channel info + list |
+| emojiList | enabled | Custom emoji list |
 
 ### `imessage` (imsg CLI)
 
@@ -430,7 +496,7 @@ Z.AI models are available as `zai/<model>` (e.g. `zai/glm-4.7`) and require
 - `every`: duration string (`ms`, `s`, `m`, `h`); default unit minutes. Omit or set
   `0m` to disable.
 - `model`: optional override model for heartbeat runs (`provider/model`).
-- `target`: optional delivery channel (`last`, `whatsapp`, `telegram`, `discord`, `imessage`, `none`). Default: `last`.
+- `target`: optional delivery channel (`last`, `whatsapp`, `telegram`, `discord`, `slack`, `imessage`, `none`). Default: `last`.
 - `to`: optional recipient override (E.164 for WhatsApp, chat id for Telegram).
 - `prompt`: optional override for the heartbeat body (default: `HEARTBEAT`).
 
@@ -838,7 +904,7 @@ Hot-applied (no full gateway restart):
 - `cron` (cron service restart + concurrency update)
 - `agent.heartbeat` (heartbeat runner restart)
 - `web` (WhatsApp web provider restart)
-- `telegram`, `discord`, `signal`, `imessage` (provider restarts)
+- `telegram`, `discord`, `slack`, `signal`, `imessage` (provider restarts)
 - `agent`, `models`, `routing`, `messages`, `session`, `whatsapp`, `logging`, `skills`, `ui`, `talk`, `identity`, `wizard` (dynamic reads)
 
 Requires full Gateway restart:
@@ -1040,7 +1106,7 @@ Template placeholders are expanded in `routing.transcribeAudio.command` (and any
 | `{{GroupMembers}}` | Group members preview (best effort) |
 | `{{SenderName}}` | Sender display name (best effort) |
 | `{{SenderE164}}` | Sender phone number (best effort) |
-| `{{Surface}}` | Surface hint (whatsapp|telegram|discord|imessage|webchat|…) |
+| `{{Surface}}` | Surface hint (whatsapp|telegram|discord|slack|imessage|webchat|…) |
 
 ## Cron (Gateway scheduler)
 

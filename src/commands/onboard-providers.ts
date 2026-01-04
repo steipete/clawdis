@@ -31,6 +31,7 @@ async function noteProviderPrimer(prompter: WizardPrompter): Promise<void> {
       "WhatsApp: dedicated second number recommended; primary number OK (self-chat).",
       "Telegram: Bot API (token from @BotFather), replies via your bot.",
       "Discord: Bot token from Discord Developer Portal; invite bot to your server.",
+      "Slack: Bot token + App token (socket mode).",
       "Signal: signal-cli as a linked device; separate number recommended.",
       "iMessage: local imsg CLI; separate Apple ID recommended only on a separate Mac.",
     ].join("\n"),
@@ -59,6 +60,19 @@ async function noteDiscordTokenHelp(prompter: WizardPrompter): Promise<void> {
       "Tip: enable Message Content Intent if you need message text.",
     ].join("\n"),
     "Discord bot token",
+  );
+}
+
+async function noteSlackTokenHelp(prompter: WizardPrompter): Promise<void> {
+  await prompter.note(
+    [
+      "1) Slack API → Create App → From scratch",
+      "2) Add Socket Mode + enable it to get the app-level token (xapp-...)",
+      "3) OAuth & Permissions → install app to workspace (xoxb- bot token)",
+      "4) Enable Event Subscriptions (socket) for message events",
+      "Tip: set SLACK_BOT_TOKEN + SLACK_APP_TOKEN in your env.",
+    ].join("\n"),
+    "Slack socket mode tokens",
   );
 }
 
@@ -153,10 +167,16 @@ export async function setupProviders(
   const whatsappLinked = await detectWhatsAppLinked();
   const telegramEnv = Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim());
   const discordEnv = Boolean(process.env.DISCORD_BOT_TOKEN?.trim());
+  const slackBotEnv = Boolean(process.env.SLACK_BOT_TOKEN?.trim());
+  const slackAppEnv = Boolean(process.env.SLACK_APP_TOKEN?.trim());
   const telegramConfigured = Boolean(
     telegramEnv || cfg.telegram?.botToken || cfg.telegram?.tokenFile,
   );
   const discordConfigured = Boolean(discordEnv || cfg.discord?.token);
+  const slackConfigured = Boolean(
+    (slackBotEnv && slackAppEnv) ||
+      (cfg.slack?.botToken && cfg.slack?.appToken),
+  );
   const signalConfigured = Boolean(
     cfg.signal?.account || cfg.signal?.httpUrl || cfg.signal?.httpPort,
   );
@@ -173,6 +193,7 @@ export async function setupProviders(
       `WhatsApp: ${whatsappLinked ? "linked" : "not linked"}`,
       `Telegram: ${telegramConfigured ? "configured" : "needs token"}`,
       `Discord: ${discordConfigured ? "configured" : "needs token"}`,
+      `Slack: ${slackConfigured ? "configured" : "needs tokens"}`,
       `Signal: ${signalConfigured ? "configured" : "needs setup"}`,
       `iMessage: ${imessageConfigured ? "configured" : "needs setup"}`,
       `signal-cli: ${signalCliDetected ? "found" : "missing"} (${signalCliPath})`,
@@ -206,6 +227,11 @@ export async function setupProviders(
         value: "discord",
         label: "Discord (Bot API)",
         hint: discordConfigured ? "configured" : "needs token",
+      },
+      {
+        value: "slack",
+        label: "Slack (Socket Mode)",
+        hint: slackConfigured ? "configured" : "needs tokens",
       },
       {
         value: "signal",
@@ -374,6 +400,90 @@ export async function setupProviders(
     }
   }
 
+  if (selection.includes("slack")) {
+    let botToken: string | null = null;
+    let appToken: string | null = null;
+    if (!slackConfigured) {
+      await noteSlackTokenHelp(prompter);
+    }
+    if (
+      slackBotEnv &&
+      slackAppEnv &&
+      (!cfg.slack?.botToken || !cfg.slack?.appToken)
+    ) {
+      const keepEnv = await prompter.confirm({
+        message: "SLACK_BOT_TOKEN + SLACK_APP_TOKEN detected. Use env vars?",
+        initialValue: true,
+      });
+      if (keepEnv) {
+        next = {
+          ...next,
+          slack: {
+            ...next.slack,
+            enabled: true,
+          },
+        };
+      } else {
+        botToken = String(
+          await prompter.text({
+            message: "Enter Slack bot token (xoxb-...)",
+            validate: (value) => (value?.trim() ? undefined : "Required"),
+          }),
+        ).trim();
+        appToken = String(
+          await prompter.text({
+            message: "Enter Slack app token (xapp-...)",
+            validate: (value) => (value?.trim() ? undefined : "Required"),
+          }),
+        ).trim();
+      }
+    } else if (cfg.slack?.botToken && cfg.slack?.appToken) {
+      const keep = await prompter.confirm({
+        message: "Slack tokens already configured. Keep them?",
+        initialValue: true,
+      });
+      if (!keep) {
+        botToken = String(
+          await prompter.text({
+            message: "Enter Slack bot token (xoxb-...)",
+            validate: (value) => (value?.trim() ? undefined : "Required"),
+          }),
+        ).trim();
+        appToken = String(
+          await prompter.text({
+            message: "Enter Slack app token (xapp-...)",
+            validate: (value) => (value?.trim() ? undefined : "Required"),
+          }),
+        ).trim();
+      }
+    } else {
+      botToken = String(
+        await prompter.text({
+          message: "Enter Slack bot token (xoxb-...)",
+          validate: (value) => (value?.trim() ? undefined : "Required"),
+        }),
+      ).trim();
+      appToken = String(
+        await prompter.text({
+          message: "Enter Slack app token (xapp-...)",
+          validate: (value) => (value?.trim() ? undefined : "Required"),
+        }),
+      ).trim();
+    }
+
+    if (botToken && appToken) {
+      next = {
+        ...next,
+        slack: {
+          ...next.slack,
+          enabled: true,
+          botToken,
+          appToken,
+        },
+      };
+    }
+  }
+
   if (selection.includes("signal")) {
     let resolvedCliPath = signalCliPath;
     let cliDetected = signalCliDetected;
@@ -517,6 +627,19 @@ export async function setupProviders(
         next = {
           ...next,
           discord: { ...next.discord, enabled: false },
+        };
+      }
+    }
+
+    if (!selection.includes("slack") && slackConfigured) {
+      const disable = await prompter.confirm({
+        message: "Disable Slack provider?",
+        initialValue: false,
+      });
+      if (disable) {
+        next = {
+          ...next,
+          slack: { ...next.slack, enabled: false },
         };
       }
     }

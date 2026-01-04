@@ -60,6 +60,7 @@ export type SessionEntry = {
     | "whatsapp"
     | "telegram"
     | "discord"
+    | "slack"
     | "signal"
     | "imessage"
     | "webchat";

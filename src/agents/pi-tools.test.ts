@@ -88,6 +88,14 @@ describe("createClawdisCodingTools", () => {
     expect(discord.some((tool) => tool.name === "discord")).toBe(true);
   });
 
+  it("scopes slack tool to slack surface", () => {
+    const other = createClawdisCodingTools({ surface: "telegram" });
+    expect(other.some((tool) => tool.name === "slack")).toBe(false);
+
+    const slack = createClawdisCodingTools({ surface: "slack" });
+    expect(slack.some((tool) => tool.name === "slack")).toBe(true);
+  });
+
   it("keeps read tool image metadata intact", async () => {
     const tools = createClawdisCodingTools();
     const readTool = tools.find((tool) => tool.name === "read");

@@ -3,6 +3,7 @@ export type ProvidersStatusSnapshot = {
   whatsapp: WhatsAppStatus;
   telegram: TelegramStatus;
   discord?: DiscordStatus | null;
+  slack?: SlackStatus | null;
   signal?: SignalStatus | null;
   imessage?: IMessageStatus | null;
 };
@@ -86,6 +87,37 @@ export type DiscordStatus = {
   lastStopAt?: number | null;
   lastError?: string | null;
   probe?: DiscordProbe | null;
+  lastProbeAt?: number | null;
+};
+
+export type SlackBot = {
+  id?: string | null;
+  name?: string | null;
+};
+
+export type SlackTeam = {
+  id?: string | null;
+  name?: string | null;
+};
+
+export type SlackProbe = {
+  ok: boolean;
+  status?: number | null;
+  error?: string | null;
+  elapsedMs?: number | null;
+  bot?: SlackBot | null;
+  team?: SlackTeam | null;
+};
+
+export type SlackStatus = {
+  configured: boolean;
+  tokenSource?: string | null;
+  appTokenSource?: string | null;
+  running: boolean;
+  lastStartAt?: number | null;
+  lastStopAt?: number | null;
+  lastError?: string | null;
+  probe?: SlackProbe | null;
   lastProbeAt?: number | null;
 };
 

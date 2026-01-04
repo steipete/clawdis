@@ -113,6 +113,6 @@ pnpm clawdis health
 
 - `docs/gateway.md` (Gateway runbook; flags, supervision, ports)
 - `docs/configuration.md` (config schema + examples)
-- `docs/discord.md` and `docs/telegram.md` (reply tags + replyToMode settings)
+- `docs/discord.md`, `docs/slack.md`, and `docs/telegram.md` (reply tags + replyToMode settings)
 - `docs/clawd.md` (personal assistant setup)
 - `docs/clawdis-mac.md` (macOS app behavior; gateway lifecycle + “Attach only”)

@@ -27,6 +27,7 @@ import type {
   CronFormState,
   DiscordForm,
   IMessageForm,
+  SlackForm,
   SignalForm,
   TelegramForm,
 } from "./ui-types";
@@ -44,6 +45,7 @@ import {
   loadProviders,
   updateDiscordForm,
   updateIMessageForm,
+  updateSlackForm,
   updateSignalForm,
   updateTelegramForm,
 } from "./controllers/connections";
@@ -117,6 +119,11 @@ export type AppViewState = {
   discordSaving: boolean;
   discordTokenLocked: boolean;
   discordConfigStatus: string | null;
+  slackForm: SlackForm;
+  slackSaving: boolean;
+  slackTokenLocked: boolean;
+  slackAppTokenLocked: boolean;
+  slackConfigStatus: string | null;
   signalForm: SignalForm;
   signalSaving: boolean;
   signalConfigStatus: string | null;
@@ -269,6 +276,11 @@ export function renderApp(state: AppViewState) {
               discordTokenLocked: state.discordTokenLocked,
               discordSaving: state.discordSaving,
               discordStatus: state.discordConfigStatus,
+              slackForm: state.slackForm,
+              slackTokenLocked: state.slackTokenLocked,
+              slackAppTokenLocked: state.slackAppTokenLocked,
+              slackSaving: state.slackSaving,
+              slackStatus: state.slackConfigStatus,
               signalForm: state.signalForm,
               signalSaving: state.signalSaving,
               signalStatus: state.signalConfigStatus,
@@ -283,6 +295,8 @@ export function renderApp(state: AppViewState) {
               onTelegramSave: () => state.handleTelegramSave(),
               onDiscordChange: (patch) => updateDiscordForm(state, patch),
               onDiscordSave: () => state.handleDiscordSave(),
+              onSlackChange: (patch) => updateSlackForm(state, patch),
+              onSlackSave: () => state.handleSlackSave(),
               onSignalChange: (patch) => updateSignalForm(state, patch),
               onSignalSave: () => state.handleSignalSave(),
               onIMessageChange: (patch) => updateIMessageForm(state, patch),

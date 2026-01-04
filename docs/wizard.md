@@ -138,7 +138,7 @@ Typical fields in `~/.clawdis/clawdis.json`:
 - `agent.workspace`
 - `agent.model` / `models.providers` (if Minimax chosen)
 - `gateway.*` (mode, bind, auth, tailscale)
-- `telegram.botToken`, `discord.token`, `signal.*`, `imessage.*`
+- `telegram.botToken`, `discord.token`, `slack.botToken`, `slack.appToken`, `signal.*`, `imessage.*`
 - `skills.install.nodeManager`
 - `wizard.lastRunAt`
 - `wizard.lastRunVersion`
@@ -153,5 +153,5 @@ Sessions are stored under `~/.clawdis/sessions/`.
 
 - macOS app onboarding: `docs/onboarding.md`
 - Config reference: `docs/configuration.md`
-- Providers: `docs/whatsapp.md`, `docs/telegram.md`, `docs/discord.md`, `docs/signal.md`, `docs/imessage.md`
+- Providers: `docs/whatsapp.md`, `docs/telegram.md`, `docs/discord.md`, `docs/slack.md`, `docs/signal.md`, `docs/imessage.md`
 - Skills: `docs/skills.md`, `docs/skills-config.md`

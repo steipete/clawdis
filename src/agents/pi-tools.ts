@@ -441,6 +441,12 @@ function shouldIncludeDiscordTool(surface?: string): boolean {
   return normalized === "discord" || normalized.startsWith("discord:");
 }
 
+function shouldIncludeSlackTool(surface?: string): boolean {
+  const normalized = normalizeSurface(surface);
+  if (!normalized) return false;
+  return normalized === "slack" || normalized.startsWith("slack:");
+}
+
 export function createClawdisCodingTools(options?: {
   bash?: BashToolDefaults & ProcessToolDefaults;
   surface?: string;
@@ -494,9 +500,12 @@ export function createClawdisCodingTools(options?: {
     }),
   ];
   const allowDiscord = shouldIncludeDiscordTool(options?.surface);
-  const filtered = allowDiscord
-    ? tools
-    : tools.filter((tool) => tool.name !== "discord");
+  const allowSlack = shouldIncludeSlackTool(options?.surface);
+  const filtered = tools.filter((tool) => {
+    if (tool.name === "discord") return allowDiscord;
+    if (tool.name === "slack") return allowSlack;
+    return true;
+  });
   const sandboxed = sandbox
     ? filterToolsByPolicy(filtered, sandbox.tools)
     : filtered;

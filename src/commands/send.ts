@@ -86,6 +86,35 @@ export async function sendCommand(
     return;
   }
 
+  if (provider === "slack") {
+    const result = await deps.sendMessageSlack(opts.to, opts.message, {
+      token: process.env.SLACK_BOT_TOKEN,
+      mediaUrl: opts.media,
+    });
+    runtime.log(
+      success(
+        `✅ Sent via slack. Message ID: ${result.messageId} (channel ${result.channelId})`,
+      ),
+    );
+    if (opts.json) {
+      runtime.log(
+        JSON.stringify(
+          {
+            provider: "slack",
+            via: "direct",
+            to: opts.to,
+            channelId: result.channelId,
+            messageId: result.messageId,
+            mediaUrl: opts.media ?? null,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+    return;
+  }
+
   if (provider === "signal") {
     const result = await deps.sendMessageSignal(opts.to, opts.message, {
       mediaUrl: opts.media,

@@ -45,6 +45,7 @@ import {
   type ClawdisConfig,
   type DiscordActionConfig,
   loadConfig,
+  type SlackActionConfig,
 } from "../config/config.js";
 import {
   addRoleDiscord,
@@ -80,6 +81,22 @@ import {
 } from "../discord/send.js";
 import { callGateway } from "../gateway/call.js";
 import { detectMime, imageMimeFromFormat } from "../media/mime.js";
+import {
+  deleteSlackMessage,
+  editSlackMessage,
+  getSlackChannelInfo,
+  getSlackMemberInfo,
+  listSlackChannels,
+  listSlackEmojis,
+  listSlackPins,
+  listSlackReactions,
+  pinSlackMessage,
+  reactSlackMessage,
+  readSlackMessages,
+  searchSlackMessages,
+  sendSlackMessage,
+  unpinSlackMessage,
+} from "../slack/actions.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
 
 // biome-ignore lint/suspicious/noExplicitAny: TypeBox schema type from pi-agent-core uses a different module instance.
@@ -1931,6 +1948,86 @@ const DiscordToolSchema = Type.Union([
   }),
 ]);
 
+const SlackToolSchema = Type.Union([
+  Type.Object({
+    action: Type.Literal("react"),
+    channelId: Type.String(),
+    messageId: Type.String(),
+    emoji: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("reactions"),
+    channelId: Type.String(),
+    messageId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("sendMessage"),
+    to: Type.String(),
+    content: Type.String(),
+    mediaUrl: Type.Optional(Type.String()),
+    replyTo: Type.Optional(Type.String()),
+  }),
+  Type.Object({
+    action: Type.Literal("editMessage"),
+    channelId: Type.String(),
+    messageId: Type.String(),
+    content: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("deleteMessage"),
+    channelId: Type.String(),
+    messageId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("readMessages"),
+    channelId: Type.String(),
+    limit: Type.Optional(Type.Number()),
+    before: Type.Optional(Type.String()),
+    after: Type.Optional(Type.String()),
+  }),
+  Type.Object({
+    action: Type.Literal("searchMessages"),
+    query: Type.String(),
+    limit: Type.Optional(Type.Number()),
+    channelIds: Type.Optional(Type.Array(Type.String())),
+    channelNames: Type.Optional(Type.Array(Type.String())),
+  }),
+  Type.Object({
+    action: Type.Literal("pinMessage"),
+    channelId: Type.String(),
+    messageId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("unpinMessage"),
+    channelId: Type.String(),
+    messageId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("listPins"),
+    channelId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("permissions"),
+    channelId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("memberInfo"),
+    userId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("channelInfo"),
+    channelId: Type.String(),
+  }),
+  Type.Object({
+    action: Type.Literal("channelList"),
+    limit: Type.Optional(Type.Number()),
+    cursor: Type.Optional(Type.String()),
+  }),
+  Type.Object({
+    action: Type.Literal("emojiList"),
+  }),
+]);
+
 function createDiscordTool(): AnyAgentTool {
   return {
     label: "Discord",
@@ -3276,6 +3373,240 @@ function createSessionsSendTool(opts?: {
   };
 }
 
+function createSlackTool(): AnyAgentTool {
+  return {
+    label: "Slack",
+    name: "slack",
+    description: "Manage Slack messages, reactions, pins, and lookup actions.",
+    parameters: SlackToolSchema,
+    execute: async (_toolCallId, args) => {
+      const params = args as Record<string, unknown>;
+      const action = readStringParam(params, "action", { required: true });
+      const cfg = loadConfig();
+      const isActionEnabled = (
+        key: keyof SlackActionConfig,
+        defaultValue = true,
+      ) => {
+        const value = cfg.slack?.actions?.[key];
+        if (value === undefined) return defaultValue;
+        return value !== false;
+      };
+
+      switch (action) {
+        case "react": {
+          if (!isActionEnabled("reactions")) {
+            throw new Error("Slack reactions are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const messageId = readStringParam(params, "messageId", {
+            required: true,
+          });
+          const emoji = readStringParam(params, "emoji", { required: true });
+          await reactSlackMessage(channelId, messageId, emoji);
+          return jsonResult({ ok: true });
+        }
+        case "reactions": {
+          if (!isActionEnabled("reactions")) {
+            throw new Error("Slack reactions are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const messageId = readStringParam(params, "messageId", {
+            required: true,
+          });
+          const reactions = await listSlackReactions(channelId, messageId);
+          return jsonResult({ ok: true, reactions });
+        }
+        case "sendMessage": {
+          if (!isActionEnabled("messages")) {
+            throw new Error("Slack messages are disabled.");
+          }
+          const to = readStringParam(params, "to", { required: true });
+          const content = readStringParam(params, "content", {
+            required: true,
+          });
+          const mediaUrl = readStringParam(params, "mediaUrl");
+          const replyTo = readStringParam(params, "replyTo");
+          const result = await sendSlackMessage(to, content, {
+            mediaUrl: mediaUrl ?? undefined,
+            replyTo: replyTo ?? undefined,
+          });
+          return jsonResult({ ok: true, result });
+        }
+        case "editMessage": {
+          if (!isActionEnabled("messages")) {
+            throw new Error("Slack messages are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const messageId = readStringParam(params, "messageId", {
+            required: true,
+          });
+          const content = readStringParam(params, "content", {
+            required: true,
+          });
+          await editSlackMessage(channelId, messageId, content);
+          return jsonResult({ ok: true });
+        }
+        case "deleteMessage": {
+          if (!isActionEnabled("messages")) {
+            throw new Error("Slack messages are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const messageId = readStringParam(params, "messageId", {
+            required: true,
+          });
+          await deleteSlackMessage(channelId, messageId);
+          return jsonResult({ ok: true });
+        }
+        case "readMessages": {
+          if (!isActionEnabled("messages")) {
+            throw new Error("Slack messages are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const limitRaw = params.limit;
+          const limit =
+            typeof limitRaw === "number" && Number.isFinite(limitRaw)
+              ? limitRaw
+              : undefined;
+          const before = readStringParam(params, "before");
+          const after = readStringParam(params, "after");
+          const result = await readSlackMessages(channelId, {
+            limit,
+            before: before ?? undefined,
+            after: after ?? undefined,
+          });
+          return jsonResult({ ok: true, ...result });
+        }
+        case "searchMessages": {
+          if (!isActionEnabled("search")) {
+            throw new Error("Slack search is disabled.");
+          }
+          const query = readStringParam(params, "query", {
+            required: true,
+          });
+          const limitRaw = params.limit;
+          const limit =
+            typeof limitRaw === "number" && Number.isFinite(limitRaw)
+              ? limitRaw
+              : undefined;
+          const channelIds =
+            readStringArrayParam(params, "channelIds", {
+              label: "channelIds",
+            }) ?? [];
+          const channelNames =
+            readStringArrayParam(params, "channelNames", {
+              label: "channelNames",
+            }) ?? [];
+          const result = await searchSlackMessages(query, {
+            limit,
+            channelIds: channelIds.length > 0 ? channelIds : undefined,
+            channelNames: channelNames.length > 0 ? channelNames : undefined,
+          });
+          return jsonResult({ ok: true, ...result });
+        }
+        case "pinMessage": {
+          if (!isActionEnabled("pins")) {
+            throw new Error("Slack pins are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const messageId = readStringParam(params, "messageId", {
+            required: true,
+          });
+          await pinSlackMessage(channelId, messageId);
+          return jsonResult({ ok: true });
+        }
+        case "unpinMessage": {
+          if (!isActionEnabled("pins")) {
+            throw new Error("Slack pins are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const messageId = readStringParam(params, "messageId", {
+            required: true,
+          });
+          await unpinSlackMessage(channelId, messageId);
+          return jsonResult({ ok: true });
+        }
+        case "listPins": {
+          if (!isActionEnabled("pins")) {
+            throw new Error("Slack pins are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const pins = await listSlackPins(channelId);
+          return jsonResult({ ok: true, pins });
+        }
+        case "permissions": {
+          if (!isActionEnabled("permissions")) {
+            throw new Error("Slack permissions are disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const info = await getSlackChannelInfo(channelId);
+          return jsonResult({ ok: true, info });
+        }
+        case "memberInfo": {
+          if (!isActionEnabled("memberInfo")) {
+            throw new Error("Slack member info is disabled.");
+          }
+          const userId = readStringParam(params, "userId", { required: true });
+          const info = await getSlackMemberInfo(userId);
+          return jsonResult({ ok: true, info });
+        }
+        case "channelInfo": {
+          if (!isActionEnabled("channelInfo")) {
+            throw new Error("Slack channel info is disabled.");
+          }
+          const channelId = readStringParam(params, "channelId", {
+            required: true,
+          });
+          const info = await getSlackChannelInfo(channelId);
+          return jsonResult({ ok: true, info });
+        }
+        case "channelList": {
+          if (!isActionEnabled("channelInfo")) {
+            throw new Error("Slack channel info is disabled.");
+          }
+          const limitRaw = params.limit;
+          const limit =
+            typeof limitRaw === "number" && Number.isFinite(limitRaw)
+              ? limitRaw
+              : undefined;
+          const cursor = readStringParam(params, "cursor");
+          const info = await listSlackChannels({
+            limit,
+            cursor: cursor ?? undefined,
+          });
+          return jsonResult({ ok: true, info });
+        }
+        case "emojiList": {
+          if (!isActionEnabled("emojiList")) {
+            throw new Error("Slack emoji list is disabled.");
+          }
+          const emojis = await listSlackEmojis();
+          return jsonResult({ ok: true, emojis });
+        }
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+    },
+  };
+}
+
 export function createClawdisTools(options?: {
   browserControlUrl?: string;
   agentSessionKey?: string;
@@ -3287,6 +3618,7 @@ export function createClawdisTools(options?: {
     createNodesTool(),
     createCronTool(),
     createDiscordTool(),
+    createSlackTool(),
     createGatewayTool(),
     createSessionsListTool(),
     createSessionsHistoryTool(),

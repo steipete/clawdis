@@ -36,8 +36,10 @@ import type {
 } from "./types";
 import {
   defaultDiscordActions,
+  defaultSlackActions,
   type CronFormState,
   type DiscordForm,
+  type SlackForm,
   type IMessageForm,
   type SignalForm,
   type TelegramForm,
@@ -58,6 +60,7 @@ import {
   loadProviders,
   logoutWhatsApp,
   saveDiscordConfig,
+  saveSlackConfig,
   saveIMessageConfig,
   saveSignalConfig,
   saveTelegramConfig,
@@ -244,6 +247,30 @@ export class ClawdisApp extends LitElement {
   @state() discordSaving = false;
   @state() discordTokenLocked = false;
   @state() discordConfigStatus: string | null = null;
+  @state() slackForm: SlackForm = {
+    enabled: true,
+    botToken: "",
+    appToken: "",
+    dmEnabled: true,
+    allowFrom: "",
+    groupEnabled: false,
+    groupChannels: "",
+    mediaMaxMb: "",
+    textChunkLimit: "",
+    replyToMode: "off",
+    reactionNotifications: "own",
+    reactionAllowlist: "",
+    slashEnabled: false,
+    slashName: "",
+    slashSessionPrefix: "",
+    slashEphemeral: true,
+    actions: { ...defaultSlackActions },
+    channels: [],
+  };
+  @state() slackSaving = false;
+  @state() slackTokenLocked = false;
+  @state() slackAppTokenLocked = false;
+  @state() slackConfigStatus: string | null = null;
   @state() signalForm: SignalForm = {
     enabled: true,
     account: "",
@@ -770,6 +797,12 @@ export class ClawdisApp extends LitElement {
 
   async handleDiscordSave() {
     await saveDiscordConfig(this);
+    await loadConfig(this);
+    await loadProviders(this, true);
+  }
+
+  async handleSlackSave() {
+    await saveSlackConfig(this);
     await loadConfig(this);
     await loadProviders(this, true);
   }

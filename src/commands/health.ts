@@ -4,6 +4,7 @@ import { type DiscordProbe, probeDiscord } from "../discord/probe.js";
 import { callGateway } from "../gateway/call.js";
 import { info } from "../globals.js";
 import type { RuntimeEnv } from "../runtime.js";
+import { probeSlack, type SlackProbe } from "../slack/probe.js";
 import { probeTelegram, type TelegramProbe } from "../telegram/probe.js";
 import { resolveTelegramToken } from "../telegram/token.js";
 import { resolveHeartbeatSeconds } from "../web/reconnect.js";
@@ -39,6 +40,10 @@ export type HealthSummary = {
   discord: {
     configured: boolean;
     probe?: DiscordProbe;
+  };
+  slack: {
+    configured: boolean;
+    probe?: SlackProbe;
   };
   heartbeatSeconds: number;
   sessions: {
@@ -89,6 +94,16 @@ export async function getHealthSnapshot(
     ? await probeDiscord(discordToken.trim(), cappedTimeout)
     : undefined;
 
+  const slackBotToken =
+    process.env.SLACK_BOT_TOKEN ?? cfg.slack?.botToken ?? "";
+  const slackAppToken =
+    process.env.SLACK_APP_TOKEN ?? cfg.slack?.appToken ?? "";
+  const slackConfigured =
+    slackBotToken.trim().length > 0 && slackAppToken.trim().length > 0;
+  const slackProbe = slackConfigured
+    ? await probeSlack(slackBotToken.trim(), cappedTimeout)
+    : undefined;
+
   const summary: HealthSummary = {
     ok: true,
     ts: Date.now(),
@@ -96,6 +111,7 @@ export async function getHealthSnapshot(
     web: { linked, authAgeMs },
     telegram: { configured: telegramConfigured, probe: telegramProbe },
     discord: { configured: discordConfigured, probe: discordProbe },
+    slack: { configured: slackConfigured, probe: slackProbe },
     heartbeatSeconds,
     sessions: {
       path: storePath,
@@ -160,6 +176,15 @@ export async function healthCommand(
         : `Discord: failed (${summary.discord.probe?.status ?? "unknown"})${summary.discord.probe?.error ? ` - ${summary.discord.probe.error}` : ""}`
       : "Discord: not configured";
     runtime.log(discordLabel);
+
+    const slackLabel = summary.slack.configured
+      ? summary.slack.probe?.ok
+        ? info(
+            `Slack: ok${summary.slack.probe.team?.name ? ` (${summary.slack.probe.team.name})` : ""} (${summary.slack.probe.elapsedMs}ms)`,
+          )
+        : `Slack: failed (${summary.slack.probe?.status ?? "unknown"})${summary.slack.probe?.error ? ` - ${summary.slack.probe.error}` : ""}`
+      : "Slack: not configured";
+    runtime.log(slackLabel);
 
     runtime.log(info(`Heartbeat interval: ${summary.heartbeatSeconds}s`));
     runtime.log(

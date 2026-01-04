@@ -55,6 +55,12 @@ const hoisted = vi.hoisted(() => {
         lastStopAt: null,
         lastError: null,
       },
+      slack: {
+        running: false,
+        lastStartAt: null,
+        lastStopAt: null,
+        lastError: null,
+      },
       signal: {
         running: false,
         lastStartAt: null,
@@ -78,6 +84,8 @@ const hoisted = vi.hoisted(() => {
     stopTelegramProvider: vi.fn(async () => {}),
     startDiscordProvider: vi.fn(async () => {}),
     stopDiscordProvider: vi.fn(async () => {}),
+    startSlackProvider: vi.fn(async () => {}),
+    stopSlackProvider: vi.fn(async () => {}),
     startSignalProvider: vi.fn(async () => {}),
     stopSignalProvider: vi.fn(async () => {}),
     startIMessageProvider: vi.fn(async () => {}),
